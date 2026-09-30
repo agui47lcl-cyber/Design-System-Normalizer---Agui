@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 ui.html 控件、浏览器文件/剪贴板能力与插件主线程的规范包、配置和扫描消息
- * [OUTPUT]: 对外提供单步目标选择与扫描诊断，省略常驻提示，操作反馈按需显示且旧预览随配置失效
+ * [OUTPUT]: 对外提供单步目标选择、扫描诊断、可退出的导出流程与拖动/键盘高度调节
  * [POS]: src 的 UI 交互层，不持有 Figma 节点，以加载状态保护目标切换和扫描/应用协议
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -13,6 +13,8 @@ const state = {
   confirmedProfileId: null,
   profiles: [],
   matched: 0,
+  mainStatus: null,
+  exportStatusActive: false,
 };
 const elements = {
   profile: document.getElementById("profile"),
@@ -43,6 +45,8 @@ const elements = {
   catalogJson: document.getElementById("catalogJson"),
   downloadCatalog: document.getElementById("downloadCatalog"),
   copyCatalog: document.getElementById("copyCatalog"),
+  finishCatalog: document.getElementById("finishCatalog"),
+  resizeHandle: document.getElementById("resizeHandle"),
 };
 
 const MAX_CATALOG_BYTES = 10 * 1024 * 1024;
@@ -79,6 +83,7 @@ function syncActions() {
   elements.chooseCatalog.disabled = !state.initialized || state.busy;
   elements.downloadCatalog.disabled = state.busy;
   elements.copyCatalog.disabled = state.busy;
+  elements.finishCatalog.disabled = state.busy;
   for (const id of SETTING_IDS) document.getElementById(id).disabled = state.busy;
   elements.scope.querySelectorAll('[data-slot="toggle-group-item"]').forEach((item) => {
     item.disabled = state.busy;
@@ -86,6 +91,7 @@ function syncActions() {
 }
 
 function setBusy(title, description) {
+  state.exportStatusActive = false;
   state.busy = true;
   elements.status.hidden = false;
   elements.status.dataset.tone = "neutral";
@@ -95,7 +101,9 @@ function setBusy(title, description) {
   syncActions();
 }
 
-function setStatus(title, description, tone, visible = true) {
+function setStatus(title, description, tone, visible = true, owner = "main") {
+  state.exportStatusActive = owner === "export";
+  if (!state.exportStatusActive) state.mainStatus = [title, description, tone, visible];
   state.busy = false;
   elements.status.hidden = !visible;
   elements.status.dataset.tone = tone || "neutral";
@@ -104,6 +112,51 @@ function setStatus(title, description, tone, visible = true) {
   elements.statusDescription.hidden = !description;
   syncActions();
 }
+
+function setExportStatus(title, description, tone) {
+  setStatus(title, description, tone, true, "export");
+}
+
+// --- 窗口尺寸：屏幕坐标避免窗口高度变化干扰拖动差值 ---
+const WINDOW_HEIGHT = { min: 480, max: 1040, step: 40 };
+let resizeDrag = null;
+
+function resizeWindow(height) {
+  if (!Number.isFinite(height)) return;
+  const bounded = Math.round(Math.max(WINDOW_HEIGHT.min, Math.min(WINDOW_HEIGHT.max, height)));
+  parent.postMessage({ pluginMessage: { type: "resize", height: bounded } }, "*");
+}
+
+elements.resizeHandle.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0 || resizeDrag) return;
+  event.preventDefault();
+  resizeDrag = { pointerId: event.pointerId, y: event.screenY, height: window.innerHeight };
+  elements.resizeHandle.setPointerCapture(event.pointerId);
+});
+elements.resizeHandle.addEventListener("pointermove", (event) => {
+  if (resizeDrag?.pointerId !== event.pointerId) return;
+  resizeWindow(resizeDrag.height + event.screenY - resizeDrag.y);
+});
+function endResize(event) {
+  if (resizeDrag?.pointerId !== event.pointerId) return;
+  resizeDrag = null;
+  if (elements.resizeHandle.hasPointerCapture(event.pointerId)) {
+    elements.resizeHandle.releasePointerCapture(event.pointerId);
+  }
+}
+for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
+  elements.resizeHandle.addEventListener(type, endResize);
+}
+elements.resizeHandle.addEventListener("keydown", (event) => {
+  const heights = { ArrowUp: window.innerHeight - WINDOW_HEIGHT.step,
+    ArrowDown: window.innerHeight + WINDOW_HEIGHT.step, Home: WINDOW_HEIGHT.min, End: WINDOW_HEIGHT.max };
+  if (!(event.key in heights)) return;
+  event.preventDefault();
+  resizeWindow(heights[event.key]);
+});
+window.addEventListener("resize", () => {
+  elements.resizeHandle.setAttribute("aria-valuenow", String(window.innerHeight));
+});
 
 function setScope(value) {
   elements.scope.dataset.value = value;
@@ -304,22 +357,33 @@ elements.downloadCatalog.addEventListener("click", () => {
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setStatus("已发起下载", "如果 Figma 未保存文件，可复制下方 JSON 手动保存为 .json 文件。", "neutral");
+    setExportStatus("已发起下载", "如果 Figma 未保存文件，可复制下方 JSON 手动保存；保存后点击“完成”返回。", "neutral");
   } catch (error) {
-    setStatus("无法下载", "请复制下方 JSON 并保存为 .json 文件。", "error");
+    setExportStatus("无法下载", "请复制下方 JSON 并保存为 .json 文件。", "error");
   }
 });
 
 elements.copyCatalog.addEventListener("click", async () => {
+  if (state.busy || !elements.catalogJson.value) return;
+  setBusy("正在复制 JSON", "");
   try {
     await navigator.clipboard.writeText(elements.catalogJson.value);
-    setStatus("已复制 JSON", "可粘贴到文本文件，并以 .json 扩展名保存。", "neutral");
+    setExportStatus("已复制 JSON", "可粘贴并保存为 .json 文件；点击“完成”返回规范绑定。", "neutral");
   } catch {
     elements.catalogExportResult.hidden = false;
     elements.catalogRaw.open = true;
     elements.catalogJson.select();
-    setStatus("请手动复制", "已选中 JSON；按 ⌘C 或 Ctrl+C 后保存为 .json 文件。", "warning");
+    setExportStatus("请手动复制", "已选中 JSON；按 ⌘C 或 Ctrl+C，保存后点击“完成”返回。", "warning");
   }
+});
+
+elements.finishCatalog.addEventListener("click", () => {
+  if (state.busy) return;
+  elements.catalogExportResult.hidden = true;
+  elements.catalogRaw.open = false;
+  elements.catalogJson.value = "";
+  if (state.exportStatusActive && state.mainStatus) setStatus(...state.mainStatus);
+  elements.exportCatalog.focus();
 });
 
 window.onmessage = (event) => {
@@ -361,7 +425,7 @@ window.onmessage = (event) => {
     elements.catalogWarning.textContent = warnings.length
       ? `${warnings.length} 个组件属性缺失：${warnings.slice(0, 3).map((item) => item.name).join("、")}`
       : "";
-    setStatus(
+    setExportStatus(
       warnings.length ? "规范包已生成，但有缺项" : "规范包已生成",
       warnings.length
         ? `样式和变量已导出；${warnings.length} 个组件属性缺失，见下方。`

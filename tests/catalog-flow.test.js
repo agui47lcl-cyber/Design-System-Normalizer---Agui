@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 Node.js vm/test/assert 与 src 主线程模块、Figma API 的最小替身
- * [OUTPUT]: 对外验证规范包导入导出、单步目标切换及实例保护/已有绑定的扫描原因链路
+ * [OUTPUT]: 对外验证规范包、目标切换及扫描保护链路，并校验 UI 高度请求的数值边界
  * [POS]: tests 的主线程契约测试，覆盖纯 JSON 契约之外的跨模块编排边界
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -18,6 +18,7 @@ const modules = [
 
 test("Figma 未提供 fileKey 时仍可导出并导入已确认的目标规范", async () => {
   const messages = [];
+  const sizes = [];
   const storage = new Map();
   const documentData = new Map();
   const style = {
@@ -59,7 +60,7 @@ test("Figma 未提供 fileKey 时仍可导出并导入已确认的目标规范",
   };
   const figma = {
     showUI() {},
-    ui: { postMessage(message) { messages.push(message); } },
+    ui: { postMessage(message) { messages.push(message); }, resize(width, height) { sizes.push([width, height]); } },
     root: {
       name: "Acme Library",
       children: [{ name: "Components", findAll() {
@@ -87,6 +88,10 @@ test("Figma 未提供 fileKey 时仍可导出并导入已确认的目标规范",
   };
   vm.runInNewContext(modules, { figma, __html__: "", console, setTimeout });
   await new Promise((resolve) => setImmediate(resolve));
+  for (const height of [620.4, -100, 9000, NaN, Infinity, "600", null]) {
+    await figma.ui.onmessage({ type: "resize", height });
+  }
+  assert.deepEqual(sizes, [[440, 620], [440, 480], [440, 1040]]);
   await figma.ui.onmessage({ type: "export-catalog" });
   const exported = messages.find((message) => message.type === "catalog-exported");
   assert.ok(exported);

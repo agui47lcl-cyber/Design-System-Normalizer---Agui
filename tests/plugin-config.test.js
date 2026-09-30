@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 Node.js test/assert/fs/path/vm、manifest.json 与 src 的 UI 结构、样式和交互源码
- * [OUTPUT]: 对外验证单步目标选择、加载隔离、配置变更失效、扫描说明与安全默认值
+ * [OUTPUT]: 对外验证目标选择、预览失效、导出退出/复制回退与高度拖动的状态边界
  * [POS]: tests 的插件配置回归套件，防止权限、用户决策边界、组件结构与视觉状态在迭代中退化
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -17,7 +17,7 @@ const uiHtml = fs.readFileSync(path.join(root, "src/ui.html"), "utf8");
 const uiJs = fs.readFileSync(path.join(root, "src/ui.js"), "utf8");
 const codeJs = fs.readFileSync(path.join(root, "src/code.js"), "utf8");
 
-function uiHarness() {
+function uiHarness(clipboard = { writeText: async () => {} }) {
   const controls = new Map();
   const sent = [];
   function control(id) {
@@ -25,12 +25,20 @@ function uiHarness() {
       value: "", hidden: true, checked: true, options: ["Inter"], dataset: {}, handlers: {},
       addEventListener(type, handler) { this.handlers[type] = handler; },
       querySelectorAll() { return []; },
+      setAttribute(name, value) { this[name] = value; },
+      focus() { this.focused = true; },
+      select() { this.selected = true; },
+      setPointerCapture(id) { this.pointerId = id; },
+      hasPointerCapture(id) { return this.pointerId === id; },
+      releasePointerCapture() { this.pointerId = null; },
     });
     return controls.get(id);
   }
   const sandbox = {
     document: { getElementById: control, querySelector: () => control("scope") },
-    window: {}, parent: { postMessage(message) { sent.push(message.pluginMessage); } },
+    navigator: { clipboard },
+    window: { innerHeight: 760, addEventListener() {} },
+    parent: { postMessage(message) { sent.push(message.pluginMessage); } },
   };
   vm.runInNewContext(uiJs, sandbox);
   const message = (type, payload) => sandbox.window.onmessage({ data: { pluginMessage: { type, payload } } });
@@ -120,7 +128,8 @@ test("JSON 入口位于标题栏且导入成功隐藏旧导出结果", () => {
   const header = uiHtml.match(/<header class="header">([\s\S]*?)<\/header>/)[1];
   assert.match(header, /id="chooseCatalog"/);
   assert.match(header, /id="exportCatalog"/);
-  assert.doesNotMatch(header, /<h1|class="description"/);
+  assert.match(header, /<h1>设计规范绑定<\/h1>/);
+  assert.doesNotMatch(header, /class="description"/);
   assert.doesNotMatch(uiHtml, /id="catalogTools"|id="profileBadge"/);
   assert.match(uiJs, /elements\.chooseCatalog\.addEventListener\("click", \(\) => elements\.importCatalog\.click\(\)\)/);
   assert.match(uiJs, /message\.type === "catalog-imported"[\s\S]*?elements\.catalogExportResult\.hidden = true/);
@@ -134,6 +143,89 @@ test("安全规则默认收起但保留五项已有默认值", () => {
   for (const id of ["includeLowConfidence", "includeInstances"]) {
     assert.match(uiHtml, new RegExp(`id="${id}" type="checkbox"`));
   }
+});
+
+const exportedPayload = {
+  json: '{"name":"规范 A"}', summary: { counts: { text: 35, variables: 72, components: 0, componentSets: 0 } },
+};
+
+test("复制成功后可完成导出，恢复原提示且保留配置与可应用预览", async () => {
+  let copied;
+  const { control, message } = uiHarness({ writeText: async (value) => { copied = value; } });
+  message("init", readyPayload);
+  message("scan-result", { matched: 1, counts: { color: 1 }, previews: [], totalNodes: 1, profileName: "规范 A", warnings: [] });
+  control("includeInstances").checked = false;
+  control("exportCatalog").handlers.click();
+  message("catalog-exported", exportedPayload);
+  const copying = control("copyCatalog").handlers.click();
+  assert.equal(control("finishCatalog").disabled, true);
+  control("finishCatalog").handlers.click();
+  assert.equal(control("catalogExportResult").hidden, false);
+  await copying;
+  assert.equal(copied, exportedPayload.json);
+  assert.equal(control("statusTitle").textContent, "已复制 JSON");
+  control("finishCatalog").handlers.click();
+  assert.equal(control("catalogExportResult").hidden, true);
+  assert.equal(control("catalogJson").value, "");
+  assert.equal(control("statusTitle").textContent, "扫描完成");
+  assert.equal(control("profile").value, "a");
+  assert.equal(control("family").value, "Inter");
+  assert.equal(control("includeInstances").checked, false);
+  assert.equal(control("apply").disabled, false);
+  assert.equal(control("exportCatalog").focused, true);
+});
+
+test("复制失败保留手动复制，完成后恢复字体警告；新操作错误不会被旧导出覆盖", async () => {
+  const { control, message } = uiHarness({ writeText: async () => { throw new Error("denied"); } });
+  message("init", { ...readyPayload, fontAvailable: false });
+  message("catalog-exported", exportedPayload);
+  await control("copyCatalog").handlers.click();
+  assert.equal(control("catalogRaw").open, true);
+  assert.equal(control("catalogJson").selected, true);
+  assert.equal(control("catalogJson").value, exportedPayload.json);
+  control("finishCatalog").handlers.click();
+  assert.equal(control("catalogRaw").open, false);
+  assert.equal(control("status").hidden, false);
+  assert.match(control("statusDescription").textContent, /无法使用目标字体/);
+  message("catalog-exported", exportedPayload);
+  message("error", { message: "新的扫描失败" });
+  control("finishCatalog").handlers.click();
+  assert.equal(control("statusDescription").textContent, "新的扫描失败");
+});
+
+test("正常就绪时完成导出恢复简洁界面，之后可再次导出", () => {
+  const { control, message, sent } = uiHarness();
+  message("init", readyPayload);
+  control("exportCatalog").handlers.click();
+  message("catalog-exported", exportedPayload);
+  control("finishCatalog").handlers.click();
+  assert.equal(control("status").hidden, true);
+  assert.equal(control("scan").disabled, false);
+  control("exportCatalog").handlers.click();
+  message("catalog-exported", exportedPayload);
+  assert.equal(control("catalogExportResult").hidden, false);
+  assert.equal(control("catalogJson").value, exportedPayload.json);
+  assert.equal(sent.filter((item) => item.type === "export-catalog").length, 2);
+});
+
+test("高度拖动有上下限，取消后停止发送且键盘可继续调节", () => {
+  const { control, sent } = uiHarness();
+  const handle = control("resizeHandle");
+  const event = { button: 0, pointerId: 1, screenY: 700, preventDefault() {} };
+  handle.handlers.pointerdown(event);
+  handle.handlers.pointermove({ ...event, screenY: 600 });
+  assert.equal(sent.at(-1).height, 660);
+  handle.handlers.pointermove({ ...event, screenY: -1000 });
+  assert.equal(sent.at(-1).height, 480);
+  handle.handlers.pointermove({ ...event, screenY: 3000 });
+  assert.equal(sent.at(-1).height, 1040);
+  handle.handlers.pointercancel(event);
+  handle.handlers.pointermove({ ...event, screenY: 600 });
+  assert.equal(sent.length, 3);
+  handle.handlers.keydown({ key: "ArrowUp", preventDefault() {} });
+  assert.equal(sent.at(-1).height, 720);
+  handle.handlers.keydown({ key: "Home", preventDefault() {} });
+  assert.equal(sent.at(-1).height, 480);
 });
 
 test("设计系统和字体同一行两列且没有二次确认区", () => {

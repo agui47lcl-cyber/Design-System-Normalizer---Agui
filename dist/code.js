@@ -862,13 +862,14 @@
 
 /**
  * [INPUT]: 依赖 Figma Plugin API、规范包/设计系统配置、ScanDiagnostics、匹配器与 VDesign 预设
- * [OUTPUT]: 对外提供规范包导入导出、单步目标选择、可解释扫描及文字/颜色/圆角/间距绑定
+ * [OUTPUT]: 对外提供规范包、目标选择、可解释扫描及四类绑定，校验 UI 高度请求并固定窗口宽度
  * [POS]: src 的插件主线程，编排跨文件资产清单、用户目标、匹配计划与文档写入，UI 只消费结果
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 "use strict";
 
-figma.showUI(__html__, { width: 440, height: 760, themeColors: true });
+const WINDOW_SIZE = { width: 440, height: 760, minHeight: 480, maxHeight: 1040 };
+figma.showUI(__html__, { width: WINDOW_SIZE.width, height: WINDOW_SIZE.height, themeColors: true });
 figma.skipInvisibleInstanceChildren = false;
 
 const TOKEN_KINDS = ["text", "color", "radius", "spacing"];
@@ -1596,7 +1597,10 @@ figma.ui.onmessage = async (message) => {
     if (message.type === "select-profile") await selectProfile(message.profileId);
     if (message.type === "export-catalog") await captureLibraryCatalog();
     if (message.type === "import-catalog") await importLibraryCatalog(message.json);
-    if (message.type === "resize") figma.ui.resize(440, message.height);
+    if (message.type === "resize" && Number.isFinite(message.height)) {
+      const height = Math.round(Math.max(WINDOW_SIZE.minHeight, Math.min(WINDOW_SIZE.maxHeight, message.height)));
+      figma.ui.resize(WINDOW_SIZE.width, height);
+    }
     if (message.type === "close") figma.closePlugin();
   } catch (error) {
     figma.ui.postMessage({
