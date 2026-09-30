@@ -1,0 +1,11 @@
+{
+  "name": "design-system-normalizer-agui-design",
+  "version": "2.1.0",
+  "private": true,
+  "description": "Figma Desktop plugin that normalizes generated UI with a user-confirmed design system profile.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/*.test.js",
+    "check": "npm run build && npm test"
+  }
+}

@@ -1,0 +1,74 @@
+<!--
+  [INPUT]: 依赖 asset.css 的黑白零圆角样式层与 README 的操作顺序
+  [OUTPUT]: 对外提供 1920×1080 轮播图「工作流程」，经 scripts/render-assets.mjs 导出
+  [POS]: assets 的轮播源文件，用四步流程和默认保护规则说明插件如何介入生成稿
+  [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+-->
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Design System Normalizer - Agui · 工作流程</title>
+    <link rel="stylesheet" href="asset.css" />
+  </head>
+  <body>
+    <div class="slide">
+      <div class="grid"></div>
+
+      <div class="slide-head">
+        <h2 class="slide-title">工作流程</h2>
+        <div class="slide-index">02 / 04</div>
+      </div>
+
+      <div class="slide-body">
+        <div class="steps">
+          <div class="step">
+            <div class="step-no">01</div>
+            <div>
+              <div class="step-title">确认目标规范</div>
+              <p class="step-desc">从当前文件、已启用团队库和兼容预设中选择；推荐不会自动代替用户确认。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-no">02</div>
+            <div>
+              <div class="step-title">选择范围与类别</div>
+              <p class="step-desc">选中生成稿或扫描当前页面，文字、颜色、圆角、间距可任意组合。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-no">03</div>
+            <div>
+              <div class="step-title">扫描预览</div>
+              <p class="step-desc">逐节点列出可绑定项与跳过原因，此阶段不修改文档。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-no">04</div>
+            <div>
+              <div class="step-title">一键应用</div>
+              <p class="step-desc">一次性写入绑定，样式与变量同时落地，可在 Figma 中一步撤销。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="strip">
+          <div class="strip-title">默认保护规则</div>
+          <div class="strip-chips">
+            <span>保留已绑定项</span>
+            <span>跳过混合 TextStyle</span>
+            <span>文字仅同字号</span>
+            <span>近似颜色需手动开启</span>
+            <span>0px 保持原值</span>
+            <span>组件实例默认保护</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-foot">
+        <span>Design System Normalizer · Agui</span>
+        <span>扫描不写入，应用才写入</span>
+      </div>
+    </div>
+  </body>
+</html>

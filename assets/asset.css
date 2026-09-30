@@ -1,0 +1,541 @@
+/**
+ * [INPUT]: 依赖 assets 下各素材 HTML 的类名结构与插件 UI 同源的中性色 Token
+ * [OUTPUT]: 对外提供图标、社区封面与轮播图共用的零圆角排版层
+ * [POS]: assets 的素材样式层，与 src/ui.css 保持同源的黑白语义与零圆角身份
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
+:root {
+  --ink: #0a0a0a;
+  --paper: #ffffff;
+  --muted: #a3a3a3;
+  --dim: #8a8a8a;
+  --faint: rgba(255, 255, 255, 0.42);
+  --line: rgba(255, 255, 255, 0.14);
+  --line-strong: rgba(255, 255, 255, 0.3);
+  --border: #e5e5e5;
+  --secondary: #f5f5f5;
+  --panel-muted: #737373;
+  --success: #16a34a;
+  font-family: "Helvetica Neue", "PingFang SC", Inter, -apple-system, sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  border-radius: 0;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--ink);
+  color: var(--paper);
+  -webkit-font-smoothing: antialiased;
+}
+
+.grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 80px 80px;
+  opacity: 0.55;
+}
+
+.slide {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  padding: 92px 120px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- 图标 ---------- */
+.icon-body {
+  width: 512px;
+  height: 512px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logo {
+  width: 320px;
+  height: 320px;
+  display: block;
+}
+
+/* ---------- 封面左侧文案 ---------- */
+.cover {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 90px;
+}
+
+.cover-copy {
+  position: relative;
+  width: 1000px;
+}
+
+.eyebrow {
+  display: inline-block;
+  border: 1px solid var(--line-strong);
+  padding: 10px 18px 11px;
+  font-size: 20px;
+  letter-spacing: 0.22em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.cover-title {
+  margin-top: 44px;
+  font-size: 104px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+}
+
+.cover-owner {
+  margin-top: 14px;
+  font-size: 32px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.tagline {
+  margin-top: 40px;
+  font-size: 34px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.chips {
+  margin-top: 54px;
+  display: flex;
+  gap: 16px;
+}
+
+.chips span {
+  border: 1px solid var(--line-strong);
+  padding: 12px 20px 13px;
+  font-size: 24px;
+  color: #e5e5e5;
+}
+
+.cover-foot {
+  margin-top: 62px;
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+}
+
+/* ---------- 封面右侧插件面板 ---------- */
+.panel {
+  position: relative;
+  width: 660px;
+  height: 830px;
+  flex: none;
+  padding: 28px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.55);
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.p-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.p-title {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.p-desc {
+  margin-top: 8px;
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--panel-muted);
+}
+
+.p-badge {
+  border: 1px solid var(--border);
+  padding: 5px 10px 6px;
+  font-size: 14px;
+  color: #525252;
+  white-space: nowrap;
+}
+
+.p-alert {
+  margin-top: 22px;
+  padding: 14px 16px;
+  background: var(--secondary);
+  border: 1px solid var(--border);
+}
+
+.p-alert-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.p-alert-desc {
+  margin-top: 5px;
+  font-size: 14px;
+  color: var(--panel-muted);
+}
+
+.p-row {
+  margin-top: 20px;
+}
+
+.p-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.p-select {
+  margin-top: 8px;
+  height: 40px;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  font-size: 15px;
+}
+
+.p-select svg {
+  width: 16px;
+  height: 16px;
+}
+
+.p-toggle {
+  margin-top: 8px;
+  display: flex;
+}
+
+.p-toggle span {
+  flex: 1;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  font-size: 15px;
+}
+
+.p-toggle span + span {
+  margin-left: -1px;
+}
+
+.p-toggle .on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fafafa;
+  position: relative;
+  z-index: 1;
+}
+
+.p-legend {
+  margin-top: 20px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.p-checks {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 20px;
+}
+
+.p-checks.wide {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.p-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+}
+
+.p-box {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.p-box.on {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.p-box svg {
+  width: 12px;
+  height: 12px;
+}
+
+.p-summary {
+  margin-top: 22px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border: 1px solid var(--border);
+}
+
+.p-summary div {
+  padding: 12px 0 13px;
+  text-align: center;
+  border-left: 1px solid var(--border);
+}
+
+.p-summary div:first-child {
+  border-left: 0;
+}
+
+.p-summary strong {
+  display: block;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.p-summary span {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--panel-muted);
+}
+
+.p-actions {
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  bottom: 26px;
+  display: flex;
+  gap: 12px;
+}
+
+.p-btn {
+  flex: 1;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  border: 1px solid var(--border);
+}
+
+.p-btn.primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fafafa;
+  font-weight: 600;
+}
+
+/* ---------- 轮播页 ---------- */
+.slide-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.slide-title {
+  font-size: 60px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.slide-index {
+  font-size: 24px;
+  letter-spacing: 0.24em;
+  color: var(--faint);
+}
+
+.slide-body {
+  flex: 1;
+  min-height: 0;
+  padding-top: 56px;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 46px 84px;
+}
+
+.step {
+  display: flex;
+  gap: 26px;
+}
+
+.step-no {
+  font-size: 46px;
+  font-weight: 700;
+  line-height: 1;
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--line-strong);
+  flex: none;
+  width: 74px;
+}
+
+.step-title {
+  font-size: 32px;
+  font-weight: 600;
+}
+
+.step-desc {
+  margin-top: 12px;
+  font-size: 22px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.rule-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 34px;
+}
+
+.rule-card {
+  border: 1px solid var(--line);
+  padding: 34px 36px 36px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.rule-card h3 {
+  font-size: 32px;
+  font-weight: 600;
+}
+
+.rule-card h3 em {
+  font-style: normal;
+  font-size: 20px;
+  letter-spacing: 0.18em;
+  color: var(--faint);
+  float: right;
+  padding-top: 12px;
+}
+
+.rule-card ul {
+  margin-top: 20px;
+  list-style: none;
+}
+
+.rule-card li {
+  position: relative;
+  padding-left: 24px;
+  font-size: 22px;
+  line-height: 1.62;
+  color: var(--muted);
+}
+
+.rule-card li + li {
+  margin-top: 12px;
+}
+
+.rule-card li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 16px;
+  width: 10px;
+  height: 3px;
+  background: var(--line-strong);
+}
+
+.notes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 34px;
+}
+
+.note h3 {
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.note-bar {
+  width: 56px;
+  height: 6px;
+  margin-bottom: 22px;
+  background: var(--paper);
+}
+
+.note ul {
+  margin-top: 20px;
+  list-style: none;
+}
+
+.note li {
+  font-size: 21px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.note li + li {
+  margin-top: 12px;
+}
+
+.note em {
+  font-style: normal;
+  color: #e5e5e5;
+}
+
+.slide-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 26px;
+  border-top: 1px solid var(--line);
+  font-size: 20px;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+}
+
+.strip {
+  margin-top: 56px;
+  border: 1px solid var(--line);
+  padding: 30px 36px 34px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.strip-title {
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.strip-chips {
+  margin-top: 22px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.strip-chips span {
+  border: 1px solid var(--line-strong);
+  padding: 11px 18px 12px;
+  font-size: 21px;
+  color: #d4d4d4;
+}

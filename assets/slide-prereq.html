@@ -1,0 +1,64 @@
+<!--
+  [INPUT]: 依赖 asset.css 的黑白零圆角样式层与 manifest.json 的权限声明
+  [OUTPUT]: 对外提供 1920×1080 轮播图「使用前提与边界」，经 scripts/render-assets.mjs 导出
+  [POS]: assets 的轮播源文件，交代库依赖、权限边界与已知不支持范围
+  [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+-->
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Design System Normalizer - Agui · 使用前提</title>
+    <link rel="stylesheet" href="asset.css" />
+  </head>
+  <body>
+    <div class="slide">
+      <div class="grid"></div>
+
+      <div class="slide-head">
+        <h2 class="slide-title">使用前提与边界</h2>
+        <div class="slide-index">04 / 04</div>
+      </div>
+
+      <div class="slide-body">
+        <div class="notes">
+          <div class="note">
+            <div class="note-bar"></div>
+            <h3>使用前提</h3>
+            <ul>
+              <li><em>文件需启用要使用的团队 Variable Library</em></li>
+              <li>插件无法用代码启用库，需在 Figma 中手动启用</li>
+              <li>首次运行必须明确确认目标设计系统</li>
+              <li>团队库文字样式需已在当前文件中可见</li>
+            </ul>
+          </div>
+          <div class="note">
+            <div class="note-bar"></div>
+            <h3>权限与隐私</h3>
+            <ul>
+              <li>teamlibrary 权限，只读当前账号已有权访问的库</li>
+              <li>禁止网络访问，不请求任何外部域名</li>
+              <li>只保存目标规范 ID，不采集或上传文件内容</li>
+              <li>不需要 Personal Access Token</li>
+            </ul>
+          </div>
+          <div class="note">
+            <div class="note-bar"></div>
+            <h3>已知边界</h3>
+            <ul>
+              <li>混合 TextStyle 与跨字号的文本不会改写</li>
+              <li>0px 圆角与 0px 间距保持原值</li>
+              <li>组件实例内部属性默认不改，也不自动替换组件</li>
+              <li>写入范围可由 Figma 撤销统一回滚</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-foot">
+        <span>Design System Normalizer · Agui</span>
+        <span>组织内私有插件 · 仅限内部使用</span>
+      </div>
+    </div>
+  </body>
+</html>

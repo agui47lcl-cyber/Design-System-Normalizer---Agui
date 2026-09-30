@@ -1,0 +1,17 @@
+<!--
+  [INPUT]: 依赖 asset.css 的黑白零圆角样式层与 logo.svg 的渐变 Logo
+  [OUTPUT]: 对外提供 512px 图标母版版面，经 scripts/render-assets.mjs 导出 icon-512.png 与 icon-128.png
+  [POS]: assets 的图标源文件，以黑色底承托品牌 Logo，发布时缩放为 128×128
+  [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+-->
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Design System Normalizer - Icon</title>
+    <link rel="stylesheet" href="asset.css" />
+  </head>
+  <body class="icon-body">
+    <img class="logo" src="logo.svg" alt="Design System Normalizer logo" />
+  </body>
+</html>

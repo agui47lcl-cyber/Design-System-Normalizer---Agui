@@ -1,0 +1,92 @@
+<!--
+  [INPUT]: 依赖 asset.css 的黑白零圆角样式层与 src/ui.html 的真实控件文案
+  [OUTPUT]: 对外提供 1920×1080 社区封面版面，经 scripts/render-assets.mjs 导出 cover-1920x1080.png
+  [POS]: assets 的封面源文件，左侧讲价值右侧还原插件面板，作为发布列表的主缩略图
+  [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+-->
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Design System Normalizer - Agui · Cover</title>
+    <link rel="stylesheet" href="asset.css" />
+  </head>
+  <body>
+    <div class="slide cover">
+      <div class="grid"></div>
+
+      <div class="cover-copy">
+        <div class="eyebrow">Figma Plugin · Internal</div>
+        <h1 class="cover-title">Design System<br />Normalizer</h1>
+        <div class="cover-owner">Agui</div>
+        <p class="tagline">
+          选择你的目标设计系统，<br />
+          把生成稿绑定到真实样式与设计变量。
+        </p>
+        <div class="chips">
+          <span>文字样式</span>
+          <span>颜色变量</span>
+          <span>圆角变量</span>
+          <span>间距变量</span>
+        </div>
+        <div class="cover-foot">无网络访问 · 不采集数据 · 修改可在 Figma 中一次撤销</div>
+      </div>
+
+      <div class="panel">
+        <div class="p-head">
+          <div>
+            <div class="p-title">设计规范绑定器</div>
+            <div class="p-desc">绑定到用户确认的文字样式与设计变量。</div>
+          </div>
+          <span class="p-badge">已配置</span>
+        </div>
+
+        <div class="p-alert">
+          <div class="p-alert-title">目标规范已就绪</div>
+          <div class="p-alert-desc">VDesign Web System · 用户已确认</div>
+        </div>
+
+        <div class="p-row">
+          <div class="p-label">目标设计系统</div>
+          <div class="p-select"><span>VDesign Web System</span></div>
+        </div>
+
+        <div class="p-row">
+          <div class="p-label">目标字体</div>
+          <div class="p-select">
+            <span>PingFang SC</span>
+            <svg viewBox="0 0 24 24" fill="none"><path d="m7 10 5 5 5-5" stroke="#737373" stroke-width="2" /></svg>
+          </div>
+        </div>
+
+        <div class="p-row">
+          <div class="p-label">扫描范围</div>
+          <div class="p-toggle">
+            <span class="on">当前选择</span>
+            <span>当前页面</span>
+          </div>
+        </div>
+
+        <div class="p-legend">规范类别</div>
+        <div class="p-checks">
+          <label class="p-check"><span class="p-box on"><svg viewBox="0 0 24 24" fill="none"><path d="m5 13 4 4L19 7" stroke="#fff" stroke-width="3" /></svg></span>文字样式</label>
+          <label class="p-check"><span class="p-box on"><svg viewBox="0 0 24 24" fill="none"><path d="m5 13 4 4L19 7" stroke="#fff" stroke-width="3" /></svg></span>颜色变量</label>
+          <label class="p-check"><span class="p-box on"><svg viewBox="0 0 24 24" fill="none"><path d="m5 13 4 4L19 7" stroke="#fff" stroke-width="3" /></svg></span>圆角变量</label>
+          <label class="p-check"><span class="p-box on"><svg viewBox="0 0 24 24" fill="none"><path d="m5 13 4 4L19 7" stroke="#fff" stroke-width="3" /></svg></span>间距变量</label>
+        </div>
+
+        <div class="p-legend">安全规则</div>
+        <div class="p-checks wide">
+          <label class="p-check"><span class="p-box on"><svg viewBox="0 0 24 24" fill="none"><path d="m5 13 4 4L19 7" stroke="#fff" stroke-width="3" /></svg></span>只处理可见节点</label>
+          <label class="p-check"><span class="p-box on"><svg viewBox="0 0 24 24" fill="none"><path d="m5 13 4 4L19 7" stroke="#fff" stroke-width="3" /></svg></span>保留已经绑定的规范</label>
+          <label class="p-check"><span class="p-box on"><svg viewBox="0 0 24 24" fill="none"><path d="m5 13 4 4L19 7" stroke="#fff" stroke-width="3" /></svg></span>文字只匹配相同字号</label>
+        </div>
+
+        <div class="p-actions">
+          <span class="p-btn">扫描规范</span>
+          <span class="p-btn primary">一键应用规范</span>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,1170 @@
+<!--
+  [INPUT]: 依赖构建器注入 ui.css 与 ui.js，依赖插件主线程发送设计系统状态、扫描计划与应用结果
+  [OUTPUT]: 对外提供右上角规范包入口、双列目标选择、确认后收起的摘要区与应用预览骨架
+  [POS]: src 的 UI 结构层；工具入口与绑定主流程分离，样式与交互分别由 ui.css、ui.js 承担
+  [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+-->
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Design System Normalizer</title>
+    <style>/**
+ * [INPUT]: 依赖系统明暗模式与 ui.html 的 data-slot 结构
+ * [OUTPUT]: 对外提供零圆角、右上角工具栏、双列目标选择与明暗模式视觉层
+ * [POS]: src 的 UI 样式层，以 Vanilla CSS 复刻控件结构并与 ui.js 的披露状态协作
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
+:root {
+  color-scheme: light dark;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 12px;
+  --background: #fff;
+  --foreground: #0a0a0a;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #171717;
+  --muted: #f5f5f5;
+  --muted-foreground: #737373;
+  --accent: #f5f5f5;
+  --accent-foreground: #171717;
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --primary: #171717;
+  --primary-foreground: #fafafa;
+  --ring: #a3a3a3;
+  --success: #16a34a;
+  --success-foreground: #f0fdf4;
+  --destructive: #dc2626;
+  --destructive-foreground: #fef2f2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #fafafa;
+    --secondary: #262626;
+    --secondary-foreground: #fafafa;
+    --muted: #262626;
+    --muted-foreground: #a3a3a3;
+    --accent: #262626;
+    --accent-foreground: #fafafa;
+    --border: #404040;
+    --input: #404040;
+    --primary: #e5e5e5;
+    --primary-foreground: #171717;
+    --ring: #737373;
+    --success: #4ade80;
+    --success-foreground: #052e16;
+    --destructive: #f87171;
+    --destructive-foreground: #450a0a;
+  }
+}
+
+* {
+  box-sizing: border-box;
+  border-radius: 0 !important;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--foreground);
+  background: var(--background);
+}
+
+button,
+select,
+input,
+textarea {
+  font: inherit;
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
+}
+
+textarea:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.scroll-area {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+
+.stack,
+[data-slot="field-group"],
+[data-slot="field-set"],
+.result-stack {
+  display: flex;
+  flex-direction: column;
+}
+
+.stack {
+  gap: 16px;
+}
+
+[data-slot="field-group"] {
+  gap: 14px;
+}
+
+[data-slot="field-set"] > [data-slot="field-group"] {
+  gap: 8px;
+}
+
+[data-slot="field-set"] {
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.result-header,
+.preview-row-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 3px 10px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.header .description {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+
+h1,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.description,
+.field-description,
+.footer p,
+#statusDescription,
+.preview-source {
+  color: var(--muted-foreground);
+}
+
+.description {
+  margin-top: 3px;
+  line-height: 18px;
+}
+
+.field-description {
+  min-width: 0;
+  line-height: 17px;
+}
+
+.target-settings {
+  display: grid;
+  gap: 8px;
+}
+
+.target-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 12px;
+}
+
+.target-fields [data-slot="field"],
+.target-fields [data-slot="native-select-wrapper"] {
+  min-width: 0;
+}
+
+.target-fields [data-slot="native-select"] {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-confirmation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.catalog-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.catalog-export-result {
+  display: grid;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+}
+
+#catalogExportSummary {
+  font-weight: 600;
+  line-height: 18px;
+}
+
+#catalogWarning {
+  margin-top: 4px;
+}
+
+.catalog-raw > summary {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.safety-tools > summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.safety-tools > summary span {
+  float: right;
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+
+.safety-tools > [data-slot="field-set"] {
+  margin-top: 10px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+#catalogJson {
+  width: 100%;
+  height: 100px;
+  margin-top: 8px;
+  padding: 7px;
+  resize: vertical;
+  border: 1px solid var(--input);
+  color: var(--foreground);
+  background: var(--background);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+}
+
+[data-slot="badge"] {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 20px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 10px;
+  line-height: 16px;
+}
+
+[data-slot="badge"][data-variant="secondary"] {
+  border-color: transparent;
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+}
+
+[data-slot="badge"][data-variant="warning"] {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+[data-slot="badge"][data-variant="success"] {
+  border-color: var(--success);
+  color: var(--success);
+  background: transparent;
+}
+
+[data-slot="alert"] {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+}
+
+[data-slot="alert-title"] {
+  font-weight: 500;
+  line-height: 18px;
+}
+
+[data-slot="alert-description"] {
+  line-height: 18px;
+}
+
+[data-slot="alert"][data-tone="success"] {
+  border-color: var(--success);
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 8%, var(--background));
+}
+
+[data-slot="alert"][data-tone="error"] {
+  border-color: var(--destructive);
+  color: var(--destructive);
+  background: color-mix(in srgb, var(--destructive) 8%, var(--background));
+}
+
+[data-slot="field"] {
+  display: grid;
+  gap: 7px;
+}
+
+[data-slot="field-label"],
+[data-slot="field-legend"] {
+  padding: 0;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+[data-slot="field"][data-orientation="horizontal"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-slot="field"][data-orientation="horizontal"] [data-slot="field-label"] {
+  flex: 1;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+[data-slot="native-select-wrapper"] {
+  position: relative;
+}
+
+[data-slot="native-select"] {
+  appearance: none;
+  width: 100%;
+  height: 34px;
+  padding: 0 34px 0 9px;
+  border: 1px solid var(--input);
+  color: var(--foreground);
+  background: var(--background);
+}
+
+[data-slot="native-select"]:hover:not(:disabled) {
+  border-color: var(--ring);
+}
+
+[data-slot="native-select-icon"] {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  width: 16px;
+  height: 16px;
+  color: var(--muted-foreground);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+[data-slot="native-select-icon"] path {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+[data-slot="toggle-group"] {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+[data-slot="toggle-group-item"] {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  border: 1px solid var(--input);
+  color: var(--muted-foreground);
+  background: transparent;
+  cursor: pointer;
+}
+
+[data-slot="toggle-group-item"] + [data-slot="toggle-group-item"] {
+  margin-left: -1px;
+}
+
+[data-slot="toggle-group-item"]:hover,
+[data-slot="toggle-group-item"][data-state="on"] {
+  color: var(--accent-foreground);
+  background: var(--accent);
+}
+
+[data-slot="toggle-group-item"][data-state="on"] {
+  z-index: 1;
+  border-color: var(--foreground);
+}
+
+.category-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.category-field {
+  min-height: 38px;
+  padding: 8px;
+  border: 1px solid var(--border);
+}
+
+.category-field [data-slot="field-label"] {
+  white-space: nowrap;
+}
+
+.category-field:hover {
+  background: var(--accent);
+}
+
+.safety-options {
+  padding: 2px 0;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--border);
+}
+
+.summary > div + div {
+  border-left: 1px solid var(--border);
+}
+
+[data-slot="checkbox"] {
+  flex: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 1px solid var(--input);
+  background: var(--background);
+  cursor: pointer;
+}
+
+[data-slot="checkbox"]:checked {
+  position: relative;
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+[data-slot="checkbox"]:checked::after {
+  position: absolute;
+  top: 1px;
+  left: 4px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--primary-foreground);
+  border-width: 0 2px 2px 0;
+  content: "";
+  transform: rotate(45deg);
+}
+
+.result-stack {
+  gap: 8px;
+}
+
+[data-slot="separator"] {
+  width: 100%;
+  height: 1px;
+  margin: 6px 0;
+  background: var(--border);
+}
+
+.summary > div {
+  padding: 8px;
+  text-align: center;
+}
+
+.summary strong,
+.summary span {
+  display: block;
+}
+
+.summary strong {
+  font-size: 16px;
+  line-height: 22px;
+}
+
+.summary span {
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+
+.preview {
+  max-height: 188px;
+  overflow: auto;
+  border: 1px solid var(--border);
+}
+
+.preview-row {
+  display: grid;
+  gap: 4px;
+  padding: 8px 9px;
+}
+
+.preview-row + .preview-row {
+  border-top: 1px solid var(--border);
+}
+
+.preview-target,
+.preview-source {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-source {
+  font-size: 11px;
+}
+
+[data-slot="empty"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 74px;
+  padding: 16px 12px;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+[data-slot="empty-title"] {
+  font-weight: 500;
+}
+
+.footer {
+  display: grid;
+  gap: 9px;
+  padding: 12px 16px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 8px;
+}
+
+[data-slot="button"] {
+  height: 34px;
+  border: 1px solid transparent;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+[data-slot="button"][data-size="compact"] {
+  height: 28px;
+  padding: 0 9px;
+  white-space: nowrap;
+}
+
+[data-slot="button"]:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+[data-slot="button"][data-variant="outline"] {
+  border-color: var(--input);
+  color: var(--foreground);
+  background: var(--background);
+}
+
+[data-slot="button"][data-variant="outline"]:hover:not(:disabled) {
+  color: var(--accent-foreground);
+  background: var(--accent);
+}
+
+[data-slot="button"][data-variant="default"] {
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+[data-slot="button"]:disabled,
+[data-slot="native-select"]:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.footer p {
+  font-size: 11px;
+  line-height: 16px;
+}
+
+[hidden] {
+  display: none !important;
+}
+</style>
+  </head>
+  <body>
+    <main class="shell">
+      <div class="scroll-area">
+        <div class="stack">
+          <header class="header">
+            <h1>设计规范绑定器</h1>
+            <div class="header-actions" role="group" aria-label="JSON 规范包">
+              <button data-slot="button" data-variant="outline" data-size="compact" id="chooseCatalog" type="button" title="导入 JSON 规范包">导入</button>
+              <button data-slot="button" data-variant="outline" data-size="compact" id="exportCatalog" type="button" title="导出当前文件的 JSON 规范包">导出</button>
+            </div>
+            <input id="importCatalog" type="file" accept=".json,application/json" hidden />
+            <p class="description">把生成稿绑定到用户确认的文字样式与设计变量。</p>
+          </header>
+
+          <div data-slot="alert" id="status" role="status" aria-live="polite">
+            <div data-slot="alert-title" id="statusTitle">正在读取设计系统</div>
+            <div data-slot="alert-description" id="statusDescription">正在检查文字样式与变量库…</div>
+          </div>
+
+          <section id="catalogExportResult" class="catalog-export-result" aria-label="规范包导出结果" hidden>
+            <p id="catalogExportSummary"></p>
+            <p class="field-description" id="catalogWarning" hidden></p>
+            <div class="catalog-actions">
+              <button data-slot="button" data-variant="default" id="downloadCatalog" type="button">下载 JSON</button>
+              <button data-slot="button" data-variant="outline" id="copyCatalog" type="button">复制</button>
+            </div>
+            <details class="catalog-raw" id="catalogRaw">
+              <summary>查看原始 JSON</summary>
+              <textarea id="catalogJson" readonly aria-label="导出的 JSON 规范包"></textarea>
+            </details>
+          </section>
+
+          <div data-slot="field-group">
+            <div class="target-settings">
+              <div class="target-fields">
+                <div data-slot="field">
+                  <label data-slot="field-label" for="profile">目标设计系统</label>
+                  <div data-slot="native-select-wrapper">
+                    <select data-slot="native-select" id="profile" disabled></select>
+                    <svg data-slot="native-select-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="m7 10 5 5 5-5" />
+                    </svg>
+                  </div>
+                </div>
+                <div data-slot="field">
+                  <label data-slot="field-label" for="family">目标字体</label>
+                  <div data-slot="native-select-wrapper">
+                    <select data-slot="native-select" id="family" disabled></select>
+                    <svg data-slot="native-select-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="m7 10 5 5 5-5" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              <div class="profile-confirmation" id="profileConfirmation">
+                <p class="field-description" id="profileSummary">插件正在发现当前文件可用的设计系统…</p>
+                <button data-slot="button" data-variant="outline" data-size="compact" id="confirmProfile" type="button" disabled>设为目标规范</button>
+              </div>
+            </div>
+
+            <div data-slot="field">
+              <div data-slot="field-label" id="scopeLabel">扫描范围</div>
+              <div data-slot="toggle-group" data-variant="outline" data-value="selection" role="group" aria-labelledby="scopeLabel">
+                <button data-slot="toggle-group-item" data-value="selection" data-state="on" type="button" aria-pressed="true">当前选择</button>
+                <button data-slot="toggle-group-item" data-value="page" data-state="off" type="button" aria-pressed="false">当前页面</button>
+              </div>
+            </div>
+
+            <fieldset data-slot="field-set">
+              <legend data-slot="field-legend">规范类别</legend>
+              <div data-slot="field-group" class="category-options">
+                <div data-slot="field" data-orientation="horizontal" class="category-field">
+                  <input data-slot="checkbox" id="categoryText" type="checkbox" checked />
+                  <label data-slot="field-label" for="categoryText">文字样式</label>
+                </div>
+                <div data-slot="field" data-orientation="horizontal" class="category-field">
+                  <input data-slot="checkbox" id="categoryColor" type="checkbox" checked />
+                  <label data-slot="field-label" for="categoryColor">颜色变量</label>
+                </div>
+                <div data-slot="field" data-orientation="horizontal" class="category-field">
+                  <input data-slot="checkbox" id="categoryRadius" type="checkbox" checked />
+                  <label data-slot="field-label" for="categoryRadius">圆角变量</label>
+                </div>
+                <div data-slot="field" data-orientation="horizontal" class="category-field">
+                  <input data-slot="checkbox" id="categorySpacing" type="checkbox" checked />
+                  <label data-slot="field-label" for="categorySpacing">间距变量</label>
+                </div>
+              </div>
+            </fieldset>
+
+            <details class="safety-tools">
+              <summary>安全规则 <span>默认保护已开启</span></summary>
+              <fieldset data-slot="field-set">
+                <legend data-slot="field-legend" class="sr-only">安全规则</legend>
+                <div data-slot="field-group" class="safety-options">
+                  <div data-slot="field" data-orientation="horizontal">
+                    <input data-slot="checkbox" id="visibleOnly" type="checkbox" checked />
+                    <label data-slot="field-label" for="visibleOnly">只处理可见节点</label>
+                  </div>
+                  <div data-slot="field" data-orientation="horizontal">
+                    <input data-slot="checkbox" id="onlyUnbound" type="checkbox" checked />
+                    <label data-slot="field-label" for="onlyUnbound">保留已经绑定的规范</label>
+                  </div>
+                  <div data-slot="field" data-orientation="horizontal">
+                    <input data-slot="checkbox" id="exactSize" type="checkbox" checked />
+                    <label data-slot="field-label" for="exactSize">文字只匹配相同字号</label>
+                  </div>
+                  <div data-slot="field" data-orientation="horizontal">
+                    <input data-slot="checkbox" id="includeLowConfidence" type="checkbox" />
+                    <label data-slot="field-label" for="includeLowConfidence">允许近似颜色和低置信度匹配</label>
+                  </div>
+                  <div data-slot="field" data-orientation="horizontal">
+                    <input data-slot="checkbox" id="includeInstances" type="checkbox" />
+                    <label data-slot="field-label" for="includeInstances">允许修改组件实例内部属性</label>
+                  </div>
+                </div>
+              </fieldset>
+            </details>
+          </div>
+
+          <section class="result-stack" id="resultSection" hidden>
+            <div data-slot="separator" role="separator"></div>
+            <div class="result-header">
+              <strong>扫描结果</strong>
+              <span data-slot="badge" data-variant="secondary" id="resultBadge">待检查</span>
+            </div>
+            <div class="summary">
+              <div><strong id="countText">0</strong><span>文字</span></div>
+              <div><strong id="countColor">0</strong><span>颜色</span></div>
+              <div><strong id="countRadius">0</strong><span>圆角</span></div>
+              <div><strong id="countSpacing">0</strong><span>间距</span></div>
+            </div>
+            <div class="preview" id="preview"></div>
+          </section>
+        </div>
+      </div>
+
+      <footer class="footer">
+        <div class="actions">
+          <button data-slot="button" data-variant="outline" id="scan" type="button" disabled>扫描规范</button>
+          <button data-slot="button" data-variant="default" id="apply" type="button" disabled>一键应用规范</button>
+        </div>
+        <p>默认只绑定完全匹配项；修改可在 Figma 中一次撤销。</p>
+      </footer>
+    </main>
+    <script>/**
+ * [INPUT]: 依赖 ui.html 控件、浏览器文件/剪贴板能力与插件主线程的规范包、配置和扫描消息
+ * [OUTPUT]: 对外提供顶部 JSON 操作与扫描/应用协议，确认后收起重复摘要，保留操作反馈和警告
+ * [POS]: src 的 UI 交互层，不持有 Figma 节点，只管理用户确认的配置和可验证聚合结果
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
+"use strict";
+
+const state = {
+  initialized: false,
+  profileConfirmed: false,
+  confirmedProfileId: null,
+  profiles: [],
+  matched: 0,
+};
+const elements = {
+  profile: document.getElementById("profile"),
+  profileSummary: document.getElementById("profileSummary"),
+  profileConfirmation: document.getElementById("profileConfirmation"),
+  confirmProfile: document.getElementById("confirmProfile"),
+  family: document.getElementById("family"),
+  scope: document.querySelector('[data-slot="toggle-group"]'),
+  status: document.getElementById("status"),
+  statusTitle: document.getElementById("statusTitle"),
+  statusDescription: document.getElementById("statusDescription"),
+  scan: document.getElementById("scan"),
+  apply: document.getElementById("apply"),
+  resultSection: document.getElementById("resultSection"),
+  resultBadge: document.getElementById("resultBadge"),
+  preview: document.getElementById("preview"),
+  countText: document.getElementById("countText"),
+  countColor: document.getElementById("countColor"),
+  countRadius: document.getElementById("countRadius"),
+  countSpacing: document.getElementById("countSpacing"),
+  exportCatalog: document.getElementById("exportCatalog"),
+  chooseCatalog: document.getElementById("chooseCatalog"),
+  importCatalog: document.getElementById("importCatalog"),
+  catalogExportResult: document.getElementById("catalogExportResult"),
+  catalogExportSummary: document.getElementById("catalogExportSummary"),
+  catalogWarning: document.getElementById("catalogWarning"),
+  catalogRaw: document.getElementById("catalogRaw"),
+  catalogJson: document.getElementById("catalogJson"),
+  downloadCatalog: document.getElementById("downloadCatalog"),
+  copyCatalog: document.getElementById("copyCatalog"),
+};
+
+const MAX_CATALOG_BYTES = 10 * 1024 * 1024;
+
+function settings() {
+  return {
+    profileId: elements.profile.value,
+    targetFamily: elements.family.value,
+    scope: elements.scope.dataset.value,
+    visibleOnly: document.getElementById("visibleOnly").checked,
+    onlyUnbound: document.getElementById("onlyUnbound").checked,
+    exactSize: document.getElementById("exactSize").checked,
+    includeLowConfidence: document.getElementById("includeLowConfidence").checked,
+    includeInstances: document.getElementById("includeInstances").checked,
+    categories: {
+      text: document.getElementById("categoryText").checked,
+      color: document.getElementById("categoryColor").checked,
+      radius: document.getElementById("categoryRadius").checked,
+      spacing: document.getElementById("categorySpacing").checked,
+    },
+  };
+}
+
+function syncActions() {
+  const selectedConfirmed = state.profileConfirmed &&
+    elements.profile.value === state.confirmedProfileId;
+  elements.confirmProfile.disabled = !state.initialized || selectedConfirmed;
+  elements.family.disabled = !selectedConfirmed || elements.family.options.length === 0;
+  elements.scan.disabled = !state.initialized || !selectedConfirmed;
+  elements.apply.disabled = !state.initialized || !selectedConfirmed || state.matched === 0;
+}
+
+function setBusy(title, description) {
+  elements.status.dataset.tone = "neutral";
+  elements.statusTitle.textContent = title;
+  elements.statusDescription.textContent = description;
+  elements.statusDescription.hidden = !description;
+  elements.scan.disabled = true;
+  elements.apply.disabled = true;
+  elements.confirmProfile.disabled = true;
+}
+
+function setStatus(title, description, tone) {
+  elements.status.dataset.tone = tone || "neutral";
+  elements.statusTitle.textContent = title;
+  elements.statusDescription.textContent = description;
+  elements.statusDescription.hidden = !description;
+  syncActions();
+}
+
+function setScope(value) {
+  elements.scope.dataset.value = value;
+  elements.scope.querySelectorAll('[data-slot="toggle-group-item"]').forEach((item) => {
+    const selected = item.dataset.value === value;
+    item.dataset.state = selected ? "on" : "off";
+    item.setAttribute("aria-pressed", String(selected));
+  });
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function kindLabel(kind) {
+  return { text: "文字", color: "颜色", radius: "圆角", spacing: "间距" }[kind] || kind;
+}
+
+function selectedProfile() {
+  return state.profiles.find((profile) => profile.id === elements.profile.value) || null;
+}
+
+function renderProfiles(profiles, selectedId) {
+  state.profiles = profiles;
+  elements.profile.innerHTML = profiles.map((profile) => {
+    const suffix = profile.recommended ? "（推荐）" : profile.enabled ? "" : "（未启用）";
+    return `<option value="${escapeHtml(profile.id)}">${escapeHtml(profile.name + suffix)}</option>`;
+  }).join("");
+  elements.profile.value = selectedId;
+  elements.profile.disabled = false;
+}
+
+function renderFamilies(families, defaultFamily) {
+  elements.family.innerHTML = families.map((family) =>
+    `<option value="${escapeHtml(family)}">${escapeHtml(family)}</option>`,
+  ).join("");
+  if (families.includes(defaultFamily)) elements.family.value = defaultFamily;
+}
+
+function renderProfileChoice() {
+  const profile = selectedProfile();
+  elements.profileSummary.textContent = profile?.summary || "无法读取该设计系统的配置摘要。";
+  const confirmed = Boolean(profile && profile.id === state.confirmedProfileId && state.profileConfirmed);
+  elements.profileConfirmation.hidden = confirmed;
+  syncActions();
+}
+
+function renderPreview(items) {
+  if (!items.length) {
+    elements.preview.innerHTML = `
+      <div data-slot="empty">
+        <div data-slot="empty-header">
+          <div data-slot="empty-title">没有找到可安全绑定的规范项</div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+  elements.preview.innerHTML = items.map((item) => `
+    <div class="preview-row">
+      <div class="preview-row-top">
+        <span class="preview-target">${escapeHtml(item.target)}</span>
+        <span data-slot="badge" data-variant="${item.confidence === "low" ? "warning" : "secondary"}">${kindLabel(item.kind)}</span>
+      </div>
+      <div class="preview-source">${escapeHtml(item.source)}</div>
+    </div>
+  `).join("");
+}
+
+function renderCounts(counts) {
+  elements.countText.textContent = counts.text || 0;
+  elements.countColor.textContent = counts.color || 0;
+  elements.countRadius.textContent = counts.radius || 0;
+  elements.countSpacing.textContent = counts.spacing || 0;
+}
+
+function initializationStatus(data) {
+  if (!data.profileConfirmed) {
+    return {
+      title: "请选择目标设计系统",
+      description: "插件只负责推荐候选；确认后才会扫描和应用规范。",
+      tone: "warning",
+    };
+  }
+  if (!data.libraryEnabled && data.libraryVariableCount === 0) {
+    return {
+      title: "目标规范缺少已启用的变量库",
+      description: `${data.profileName} 的文字目录可用；颜色变量需要先在当前文件启用对应团队库。`,
+      tone: "warning",
+    };
+  }
+  return {
+    title: "目标规范已就绪",
+    description: data.fontAvailable ? "" : "当前环境无法使用目标字体；请检查字体安装或选择其他可用字体。",
+    tone: data.fontAvailable ? "neutral" : "warning",
+  };
+}
+
+elements.profile.addEventListener("change", () => {
+  state.profileConfirmed = elements.profile.value === state.confirmedProfileId;
+  state.matched = 0;
+  elements.resultSection.hidden = true;
+  renderProfileChoice();
+  if (!state.profileConfirmed) {
+    setStatus(
+      "请确认目标设计系统",
+      "当前选择只是一项候选；确认后插件才会基于它生成匹配计划。",
+      "warning",
+    );
+  }
+});
+
+elements.confirmProfile.addEventListener("click", () => {
+  const profile = selectedProfile();
+  if (!profile) return;
+  setBusy("正在载入目标规范", `正在读取 ${profile.name} 的文字样式与设计变量…`);
+  parent.postMessage({ pluginMessage: { type: "select-profile", profileId: profile.id } }, "*");
+});
+
+elements.scope.addEventListener("click", (event) => {
+  const item = event.target.closest('[data-slot="toggle-group-item"]');
+  if (item) setScope(item.dataset.value);
+});
+
+elements.scan.addEventListener("click", () => {
+  const config = settings();
+  if (!Object.values(config.categories).some(Boolean)) {
+    setStatus("请选择规范类别", "至少选择文字、颜色、圆角或间距中的一项。", "warning");
+    return;
+  }
+  if (config.categories.text && !config.targetFamily) {
+    setStatus("目标规范没有可用文字样式", "请先导入 Text Styles，或取消“文字样式”类别后继续。", "warning");
+    return;
+  }
+  setBusy("正在扫描规范", `正在读取 ${selectedProfile()?.name || "目标规范"} 的样式、变量和节点属性…`);
+  parent.postMessage({ pluginMessage: { type: "scan", settings: config } }, "*");
+});
+
+elements.apply.addEventListener("click", () => {
+  setBusy("正在应用规范", `正在按需导入并绑定 ${selectedProfile()?.name || "目标"} 设计资产…`);
+  parent.postMessage({ pluginMessage: { type: "apply", settings: settings() } }, "*");
+});
+
+elements.exportCatalog.addEventListener("click", () => {
+  setBusy("正在导出规范包", "正在采集当前文件的样式、变量和组件清单…");
+  parent.postMessage({ pluginMessage: { type: "export-catalog" } }, "*");
+});
+
+elements.chooseCatalog.addEventListener("click", () => elements.importCatalog.click());
+
+elements.importCatalog.addEventListener("change", async () => {
+  const file = elements.importCatalog.files?.[0];
+  if (!file) return;
+  elements.importCatalog.value = "";
+  if (file.size > MAX_CATALOG_BYTES) {
+    setStatus("文件过大", "JSON 规范包不能超过 10 MB。", "error");
+    return;
+  }
+  try {
+    setBusy("正在导入规范包", `正在读取 ${file.name}…`);
+    const json = await file.text();
+    parent.postMessage({ pluginMessage: { type: "import-catalog", json } }, "*");
+  } catch (error) {
+    setStatus("文件读取失败", error instanceof Error ? error.message : String(error), "error");
+  }
+});
+
+elements.downloadCatalog.addEventListener("click", () => {
+  const json = elements.catalogJson.value;
+  if (!json) return;
+  try {
+    const url = URL.createObjectURL(new Blob([json], { type: "application/json;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "design-system-catalog.json";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setStatus("已发起下载", "如果 Figma 未保存文件，可复制下方 JSON 手动保存为 .json 文件。", "neutral");
+  } catch (error) {
+    setStatus("无法下载", "请复制下方 JSON 并保存为 .json 文件。", "error");
+  }
+});
+
+elements.copyCatalog.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(elements.catalogJson.value);
+    setStatus("已复制 JSON", "可粘贴到文本文件，并以 .json 扩展名保存。", "neutral");
+  } catch {
+    elements.catalogExportResult.hidden = false;
+    elements.catalogRaw.open = true;
+    elements.catalogJson.select();
+    setStatus("请手动复制", "已选中 JSON；按 ⌘C 或 Ctrl+C 后保存为 .json 文件。", "warning");
+  }
+});
+
+window.onmessage = (event) => {
+  const message = event.data.pluginMessage;
+  if (!message) return;
+
+  if (message.type === "init") {
+    const data = message.payload;
+    state.initialized = true;
+    state.profileConfirmed = data.profileConfirmed;
+    state.confirmedProfileId = data.profileConfirmed ? data.activeProfileId : null;
+    renderProfiles(data.profiles, data.activeProfileId);
+    renderFamilies(data.families, data.defaultFamily);
+    setScope(data.selectionCount > 0 ? "selection" : "page");
+    renderProfileChoice();
+    const status = initializationStatus(data);
+    setStatus(status.title, status.description, status.tone);
+  }
+
+  if (message.type === "profile-selected") {
+    const data = message.payload;
+    state.profileConfirmed = true;
+    state.confirmedProfileId = data.activeProfileId;
+    state.matched = 0;
+    renderProfiles(data.profiles, data.activeProfileId);
+    renderFamilies(data.families, data.defaultFamily);
+    elements.resultSection.hidden = true;
+    renderProfileChoice();
+    const status = initializationStatus(data);
+    setStatus(status.title, status.description, status.tone);
+  }
+
+  if (message.type === "catalog-exported") {
+    const { json, summary, warnings = [] } = message.payload;
+    const count = summary.counts;
+    elements.catalogJson.value = json;
+    elements.catalogExportResult.hidden = false;
+    elements.catalogRaw.open = false;
+    elements.catalogExportSummary.textContent = `${count.text} 文字 · ${count.variables} 变量 · ${count.components + count.componentSets} 组件`;
+    elements.catalogWarning.hidden = warnings.length === 0;
+    elements.catalogWarning.textContent = warnings.length
+      ? `${warnings.length} 个组件属性缺失：${warnings.slice(0, 3).map((item) => item.name).join("、")}`
+      : "";
+    setStatus(
+      warnings.length ? "规范包已生成，但有缺项" : "规范包已生成",
+      warnings.length
+        ? `样式和变量已导出；${warnings.length} 个组件属性缺失，见下方。`
+        : "可下载 JSON；复制与原始内容为备用方式。",
+      warnings.length ? "warning" : "neutral",
+    );
+  }
+
+  if (message.type === "catalog-imported") {
+    const count = message.payload.counts;
+    elements.catalogExportResult.hidden = true;
+    elements.catalogRaw.open = false;
+    setStatus(
+      "规范包已导入并设为目标",
+      `文字 ${count.text} · 变量 ${count.variables} · 组件 ${count.components + count.componentSets}${message.payload.warningCount ? ` · ${message.payload.warningCount} 项组件属性缺失` : ""}；跨文件绑定仍需源库访问权限。`,
+      message.payload.warningCount ? "warning" : "neutral",
+    );
+  }
+
+  if (message.type === "scan-result") {
+    const data = message.payload;
+    state.matched = data.matched;
+    elements.resultSection.hidden = false;
+    elements.resultBadge.dataset.variant = "secondary";
+    elements.resultBadge.textContent = data.matched > 0 ? `${data.matched} 项可应用` : "无安全匹配";
+    renderCounts(data.counts);
+    renderPreview(data.previews);
+    const warning = data.warnings.length > 0 ? `；${data.warnings.length} 个颜色变量读取失败` : "";
+    setStatus(
+      "扫描完成",
+      `按「${data.profileName}」检查 ${data.totalNodes} 个节点，找到 ${data.matched} 项规范绑定${warning}。`,
+      data.matched > 0 ? "neutral" : "warning",
+    );
+  }
+
+  if (message.type === "apply-result") {
+    state.matched = 0;
+    elements.resultBadge.textContent = "已完成";
+    elements.resultBadge.dataset.variant = "success";
+    renderCounts(message.payload.counts || {});
+    setStatus("应用完成", message.payload.message, "success");
+  }
+
+  if (message.type === "error") {
+    setStatus("操作未完成", message.payload.message, "error");
+  }
+};
+</script>
+  </body>
+</html>

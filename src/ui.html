@@ -1,0 +1,162 @@
+<!--
+  [INPUT]: 依赖构建器注入 ui.css 与 ui.js，依赖插件主线程发送设计系统状态、扫描计划与应用结果
+  [OUTPUT]: 对外提供右上角规范包入口、双列目标选择、确认后收起的摘要区与应用预览骨架
+  [POS]: src 的 UI 结构层；工具入口与绑定主流程分离，样式与交互分别由 ui.css、ui.js 承担
+  [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+-->
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Design System Normalizer</title>
+    <style>/*__INLINE_CSS__*/</style>
+  </head>
+  <body>
+    <main class="shell">
+      <div class="scroll-area">
+        <div class="stack">
+          <header class="header">
+            <h1>设计规范绑定器</h1>
+            <div class="header-actions" role="group" aria-label="JSON 规范包">
+              <button data-slot="button" data-variant="outline" data-size="compact" id="chooseCatalog" type="button" title="导入 JSON 规范包">导入</button>
+              <button data-slot="button" data-variant="outline" data-size="compact" id="exportCatalog" type="button" title="导出当前文件的 JSON 规范包">导出</button>
+            </div>
+            <input id="importCatalog" type="file" accept=".json,application/json" hidden />
+            <p class="description">把生成稿绑定到用户确认的文字样式与设计变量。</p>
+          </header>
+
+          <div data-slot="alert" id="status" role="status" aria-live="polite">
+            <div data-slot="alert-title" id="statusTitle">正在读取设计系统</div>
+            <div data-slot="alert-description" id="statusDescription">正在检查文字样式与变量库…</div>
+          </div>
+
+          <section id="catalogExportResult" class="catalog-export-result" aria-label="规范包导出结果" hidden>
+            <p id="catalogExportSummary"></p>
+            <p class="field-description" id="catalogWarning" hidden></p>
+            <div class="catalog-actions">
+              <button data-slot="button" data-variant="default" id="downloadCatalog" type="button">下载 JSON</button>
+              <button data-slot="button" data-variant="outline" id="copyCatalog" type="button">复制</button>
+            </div>
+            <details class="catalog-raw" id="catalogRaw">
+              <summary>查看原始 JSON</summary>
+              <textarea id="catalogJson" readonly aria-label="导出的 JSON 规范包"></textarea>
+            </details>
+          </section>
+
+          <div data-slot="field-group">
+            <div class="target-settings">
+              <div class="target-fields">
+                <div data-slot="field">
+                  <label data-slot="field-label" for="profile">目标设计系统</label>
+                  <div data-slot="native-select-wrapper">
+                    <select data-slot="native-select" id="profile" disabled></select>
+                    <svg data-slot="native-select-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="m7 10 5 5 5-5" />
+                    </svg>
+                  </div>
+                </div>
+                <div data-slot="field">
+                  <label data-slot="field-label" for="family">目标字体</label>
+                  <div data-slot="native-select-wrapper">
+                    <select data-slot="native-select" id="family" disabled></select>
+                    <svg data-slot="native-select-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="m7 10 5 5 5-5" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              <div class="profile-confirmation" id="profileConfirmation">
+                <p class="field-description" id="profileSummary">插件正在发现当前文件可用的设计系统…</p>
+                <button data-slot="button" data-variant="outline" data-size="compact" id="confirmProfile" type="button" disabled>设为目标规范</button>
+              </div>
+            </div>
+
+            <div data-slot="field">
+              <div data-slot="field-label" id="scopeLabel">扫描范围</div>
+              <div data-slot="toggle-group" data-variant="outline" data-value="selection" role="group" aria-labelledby="scopeLabel">
+                <button data-slot="toggle-group-item" data-value="selection" data-state="on" type="button" aria-pressed="true">当前选择</button>
+                <button data-slot="toggle-group-item" data-value="page" data-state="off" type="button" aria-pressed="false">当前页面</button>
+              </div>
+            </div>
+
+            <fieldset data-slot="field-set">
+              <legend data-slot="field-legend">规范类别</legend>
+              <div data-slot="field-group" class="category-options">
+                <div data-slot="field" data-orientation="horizontal" class="category-field">
+                  <input data-slot="checkbox" id="categoryText" type="checkbox" checked />
+                  <label data-slot="field-label" for="categoryText">文字样式</label>
+                </div>
+                <div data-slot="field" data-orientation="horizontal" class="category-field">
+                  <input data-slot="checkbox" id="categoryColor" type="checkbox" checked />
+                  <label data-slot="field-label" for="categoryColor">颜色变量</label>
+                </div>
+                <div data-slot="field" data-orientation="horizontal" class="category-field">
+                  <input data-slot="checkbox" id="categoryRadius" type="checkbox" checked />
+                  <label data-slot="field-label" for="categoryRadius">圆角变量</label>
+                </div>
+                <div data-slot="field" data-orientation="horizontal" class="category-field">
+                  <input data-slot="checkbox" id="categorySpacing" type="checkbox" checked />
+                  <label data-slot="field-label" for="categorySpacing">间距变量</label>
+                </div>
+              </div>
+            </fieldset>
+
+            <details class="safety-tools">
+              <summary>安全规则 <span>默认保护已开启</span></summary>
+              <fieldset data-slot="field-set">
+                <legend data-slot="field-legend" class="sr-only">安全规则</legend>
+                <div data-slot="field-group" class="safety-options">
+                  <div data-slot="field" data-orientation="horizontal">
+                    <input data-slot="checkbox" id="visibleOnly" type="checkbox" checked />
+                    <label data-slot="field-label" for="visibleOnly">只处理可见节点</label>
+                  </div>
+                  <div data-slot="field" data-orientation="horizontal">
+                    <input data-slot="checkbox" id="onlyUnbound" type="checkbox" checked />
+                    <label data-slot="field-label" for="onlyUnbound">保留已经绑定的规范</label>
+                  </div>
+                  <div data-slot="field" data-orientation="horizontal">
+                    <input data-slot="checkbox" id="exactSize" type="checkbox" checked />
+                    <label data-slot="field-label" for="exactSize">文字只匹配相同字号</label>
+                  </div>
+                  <div data-slot="field" data-orientation="horizontal">
+                    <input data-slot="checkbox" id="includeLowConfidence" type="checkbox" />
+                    <label data-slot="field-label" for="includeLowConfidence">允许近似颜色和低置信度匹配</label>
+                  </div>
+                  <div data-slot="field" data-orientation="horizontal">
+                    <input data-slot="checkbox" id="includeInstances" type="checkbox" />
+                    <label data-slot="field-label" for="includeInstances">允许修改组件实例内部属性</label>
+                  </div>
+                </div>
+              </fieldset>
+            </details>
+          </div>
+
+          <section class="result-stack" id="resultSection" hidden>
+            <div data-slot="separator" role="separator"></div>
+            <div class="result-header">
+              <strong>扫描结果</strong>
+              <span data-slot="badge" data-variant="secondary" id="resultBadge">待检查</span>
+            </div>
+            <div class="summary">
+              <div><strong id="countText">0</strong><span>文字</span></div>
+              <div><strong id="countColor">0</strong><span>颜色</span></div>
+              <div><strong id="countRadius">0</strong><span>圆角</span></div>
+              <div><strong id="countSpacing">0</strong><span>间距</span></div>
+            </div>
+            <div class="preview" id="preview"></div>
+          </section>
+        </div>
+      </div>
+
+      <footer class="footer">
+        <div class="actions">
+          <button data-slot="button" data-variant="outline" id="scan" type="button" disabled>扫描规范</button>
+          <button data-slot="button" data-variant="default" id="apply" type="button" disabled>一键应用规范</button>
+        </div>
+        <p>默认只绑定完全匹配项；修改可在 Figma 中一次撤销。</p>
+      </footer>
+    </main>
+    <script>/*__INLINE_JS__*/</script>
+  </body>
+</html>

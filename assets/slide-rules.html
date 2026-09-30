@@ -1,0 +1,65 @@
+<!--
+  [INPUT]: 依赖 asset.css 的黑白零圆角样式层与 src 目录中四类规范的匹配算法
+  [OUTPUT]: 对外提供 1920×1080 轮播图「绑定细则」，经 scripts/render-assets.mjs 导出
+  [POS]: assets 的轮播源文件，说明文字、颜色、圆角、间距各自绑到什么资产
+  [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+-->
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Design System Normalizer - Agui · 绑定细则</title>
+    <link rel="stylesheet" href="asset.css" />
+  </head>
+  <body>
+    <div class="slide">
+      <div class="grid"></div>
+
+      <div class="slide-head">
+        <h2 class="slide-title">四类规范的绑定细则</h2>
+        <div class="slide-index">03 / 04</div>
+      </div>
+
+      <div class="slide-body">
+        <div class="rule-grid">
+          <div class="rule-card">
+            <h3>文字样式<em>TYPE</em></h3>
+            <ul>
+              <li>使用目标配置在当前文件中可见的 Text Styles</li>
+              <li>VDesign 兼容预设保留 35 个已发布样式 key</li>
+              <li>只匹配相同字号，混合样式直接跳过</li>
+            </ul>
+          </div>
+          <div class="rule-card">
+            <h3>颜色变量<em>COLOR</em></h3>
+            <ul>
+              <li>动态读取当前文件已启用的变量库，避免缓存过期</li>
+              <li>以颜色值为硬约束，节点语义用于消歧填充与描边</li>
+              <li>默认只绑定值完全相符的变量</li>
+            </ul>
+          </div>
+          <div class="rule-card">
+            <h3>圆角变量<em>RADIUS</em></h3>
+            <ul>
+              <li>按 FLOAT Variable 的真实解析值匹配圆角</li>
+              <li>0px 圆角保持原值，不制造无意义绑定</li>
+            </ul>
+          </div>
+          <div class="rule-card">
+            <h3>间距变量<em>SPACING</em></h3>
+            <ul>
+              <li>覆盖 Auto Layout 的 gap 与四向 padding</li>
+              <li>使用解析后的实际像素值，不把变量名数字当像素</li>
+              <li>0px 间距保持原值</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-foot">
+        <span>Design System Normalizer · Agui</span>
+        <span>绑定真实资产，而不是把外观改得相似</span>
+      </div>
+    </div>
+  </body>
+</html>
