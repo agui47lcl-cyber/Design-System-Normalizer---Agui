@@ -374,6 +374,98 @@
 });
 
 /**
+ * [INPUT]: 依赖主线程提供的节点树、扫描配置、匹配记录、候选数量与变量导入失败信息
+ * [OUTPUT]: 对外提供 ScanDiagnostics，统一节点保护筛选、跳过记录与面向 UI 的原因聚合
+ * [POS]: src 的扫描解释边界；不导入资产或写入节点，防止保护规则和空结果说明各自演化
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
+(function registerScanDiagnostics(root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  root.ScanDiagnostics = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function createScanDiagnostics() {
+  "use strict";
+
+  function collectSceneNodes(scope, figma) {
+    const roots = scope === "page" ? [figma.currentPage] : [...figma.currentPage.selection];
+    if (scope === "selection" && roots.length === 0) {
+      throw new Error("请先选择一个或多个画板，或者切换到“当前页面”范围。");
+    }
+    const nodes = new Map();
+    function visit(node) {
+      if (node.type !== "PAGE" && node.type !== "DOCUMENT") nodes.set(node.id, node);
+      if ("children" in node) for (const child of node.children) visit(child);
+    }
+    for (const root of roots) visit(root);
+    return [...nodes.values()];
+  }
+
+  function protectionReason(node, settings) {
+    let hidden = false;
+    let instance = false;
+    for (let current = node; current && !["PAGE", "DOCUMENT"].includes(current.type); current = current.parent) {
+      hidden ||= current.visible === false;
+      instance ||= current.type === "INSTANCE";
+    }
+    if (settings.visibleOnly && hidden) return { code: "hidden", reason: "不可见节点已跳过" };
+    if (!settings.includeInstances && instance) return { code: "instance", reason: "实例保护，内部属性未参与扫描" };
+    return null;
+  }
+
+  function record(skipped, kind, node, code, reason) {
+    skipped.push({ kind, id: node.id, code, reason });
+  }
+
+  function filterNodes(nodes, settings, skipped) {
+    return nodes.filter((node) => {
+      const reason = protectionReason(node, settings);
+      if (!reason) return true;
+      record(skipped, "node", node, reason.code, reason.reason);
+      return false;
+    });
+  }
+
+  function summarize(skipped, matches, available, failures, categories) {
+    const groups = new Map();
+    for (const item of skipped) {
+      const unit = item.kind === "node" ? "节点" : item.code === "unresolved" ? "次" : "属性";
+      const key = `${unit}:${item.code || "unmatched"}:${item.reason}`;
+      if (!groups.has(key)) groups.set(key, { code: item.code || "unmatched", reason: item.reason, count: 0, unit });
+      groups.get(key).count += 1;
+    }
+    const reasons = [...groups.values()];
+    const labels = { text: "文字样式", color: "颜色变量", radius: "圆角变量", spacing: "间距变量" };
+    for (const kind of Object.keys(labels)) {
+      if (categories[kind] && available[kind] === 0) {
+        reasons.push({ code: "missing", reason: `目标规范没有可用${labels[kind]}`, count: 0, unit: "候选" });
+      }
+    }
+    if (failures.length) reasons.push({
+      code: "read-failure", reason: "变量导入失败，请检查源库访问权限", count: failures.length, unit: "变量",
+    });
+    const lowConfidence = Object.values(matches).flat().filter((item) => item.confidence === "low").length;
+    if (lowConfidence) reasons.push({
+      code: "approximate", reason: "近似或低置信度候选，应用前请检查预览", count: lowConfidence, unit: "属性",
+    });
+    let emptyTitle = "没有新增可绑定项";
+    let hint = "请查看扫描说明；没有新增绑定不代表画稿中没有规范颜色。";
+    if (reasons.some((item) => ["read-failure", "unresolved", "missing"].includes(item.code))) {
+      emptyTitle = "规范候选缺失或读取失败";
+      hint = "检查所选规范、变量模式及源库访问权限，不需要先开启近似匹配。";
+    } else if (reasons.some((item) => item.code === "instance")) {
+      emptyTitle = "没有新增绑定，部分节点受实例保护";
+      hint = "如需处理实例内部属性，可在安全规则中勾选对应选项后重新扫描。";
+    } else if (reasons.length && reasons.every((item) => item.code === "bound")) {
+      emptyTitle = "已有绑定已保留，无需重复应用";
+      hint = "已有绑定未检查是否属于当前目标规范；这里只说明保留规则生效。";
+    }
+    return { available, reasons, lowConfidence, variableFailures: failures.length, emptyTitle, hint };
+  }
+
+  return { collectSceneNodes, filterNodes, record, summarize };
+});
+
+/**
  * [INPUT]: 依赖插件主线程提供的文字节点描述与本地 Text Style 描述
  * [OUTPUT]: 对外提供 FontStyleMatcher，完成语义角色、字重、字号与行高的确定性匹配
  * [POS]: src 的纯算法核心，不依赖 Figma 全局对象，可由 Node.js 回归测试直接验证
@@ -528,7 +620,7 @@
 
 /**
  * [INPUT]: 依赖插件主线程提供的节点属性描述与已解析 VDesign 变量候选
- * [OUTPUT]: 对外提供 VDesignTokenMatcher，完成颜色语义消歧与数值 Token 的确定性匹配
+ * [OUTPUT]: 对外提供 VDesignTokenMatcher，先筛选颜色精度再做语义消歧，并精确匹配数值 Token
  * [POS]: src 的纯 Token 匹配核心，不依赖 Figma 全局对象，与 matcher.js 分别处理变量和文字样式
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -613,16 +705,17 @@
         };
       })
       .filter(({ distance }) => Number.isFinite(distance));
-    scored.sort((left, right) => {
+    const exact = scored.filter(({ distance }) => distance <= settings.exactTolerance);
+    const eligible = exact.length ? exact : settings.allowApproximate
+      ? scored.filter(({ distance }) => distance <= settings.approximateTolerance)
+      : [];
+    eligible.sort((left, right) => {
       if (left.score !== right.score) return left.score - right.score;
       return String(left.candidate.name).localeCompare(String(right.candidate.name), "zh-Hans-CN");
     });
-    const winner = scored[0];
-    const limit = settings.allowApproximate
-      ? settings.approximateTolerance
-      : settings.exactTolerance;
-    if (!winner || winner.distance > limit) {
-      return { matched: false, reason: "没有颜色值相符的 VDesign 变量" };
+    const winner = eligible[0];
+    if (!winner) {
+      return { matched: false, reason: "没有颜色值相符的目标变量" };
     }
     return {
       matched: true,
@@ -645,7 +738,7 @@
       .sort((left, right) => left.delta - right.delta);
     const winner = scored[0];
     if (!winner || winner.delta > settings.tolerance) {
-      return { matched: false, reason: `没有 ${source}px 的 VDesign Token` };
+      return { matched: false, reason: `没有 ${source}px 的目标变量` };
     }
     return { matched: true, token: winner.candidate, confidence: "high" };
   }
@@ -768,8 +861,8 @@
 });
 
 /**
- * [INPUT]: 依赖 Figma Plugin API、组件采集/规范包契约、设计系统配置、匹配器与 VDesign 预设
- * [OUTPUT]: 对外提供源文件规范包导出、导入记忆、目标规范扫描预览及文字/颜色/圆角/间距绑定
+ * [INPUT]: 依赖 Figma Plugin API、规范包/设计系统配置、ScanDiagnostics、匹配器与 VDesign 预设
+ * [OUTPUT]: 对外提供规范包导入导出、单步目标选择、可解释扫描及文字/颜色/圆角/间距绑定
  * [POS]: src 的插件主线程，编排跨文件资产清单、用户目标、匹配计划与文档写入，UI 只消费结果
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -806,44 +899,6 @@ function serializeLineHeight(value) {
   if (!value || value === figma.mixed) return null;
   if (value.unit === "AUTO") return { unit: "AUTO" };
   return { unit: value.unit, value: value.value };
-}
-
-function isInsideInstance(node) {
-  let current = node;
-  while (current && current.type !== "PAGE" && current.type !== "DOCUMENT") {
-    if (current.type === "INSTANCE") return true;
-    current = current.parent;
-  }
-  return false;
-}
-
-function isEffectivelyVisible(node) {
-  let current = node;
-  while (current && current.type !== "PAGE" && current.type !== "DOCUMENT") {
-    if ("visible" in current && current.visible === false) return false;
-    current = current.parent;
-  }
-  return true;
-}
-
-function collectSceneNodes(scope) {
-  const roots = scope === "page" ? [figma.currentPage] : [...figma.currentPage.selection];
-  if (scope === "selection" && roots.length === 0) {
-    throw new Error("请先选择一个或多个画板，或者切换到“当前页面”范围。");
-  }
-  const nodes = new Map();
-  function visit(node) {
-    if (node.type !== "PAGE" && node.type !== "DOCUMENT") nodes.set(node.id, node);
-    if ("children" in node) for (const child of node.children) visit(child);
-  }
-  for (const root of roots) visit(root);
-  return [...nodes.values()];
-}
-
-function shouldProcessNode(node, settings) {
-  if (settings.visibleOnly && !isEffectivelyVisible(node)) return false;
-  if (!settings.includeInstances && isInsideInstance(node)) return false;
-  return true;
 }
 
 function describeTextNode(node) {
@@ -1106,10 +1161,10 @@ function scopeAllowsColor(variable, property, nodeType) {
   return scopes.includes("SHAPE_FILL") || scopes.includes("FRAME_FILL");
 }
 
-function resolveColorCandidates(variables, node, property) {
+function resolveColorCandidates(variables, node, property, skipped) {
   const candidates = [];
   for (const variable of variables) {
-    if (!scopeAllowsColor(variable, property, node.type)) continue;
+    if (variable.resolvedType !== "COLOR" || !scopeAllowsColor(variable, property, node.type)) continue;
     try {
       const resolved = variable.resolveForConsumer(node);
       if (resolved.resolvedType !== "COLOR") continue;
@@ -1122,7 +1177,7 @@ function resolveColorCandidates(variables, node, property) {
         variable,
       });
     } catch {
-      // A variable can fail to resolve in an incompatible explicit mode; omit it for this node.
+      globalThis.ScanDiagnostics.record(skipped, "color", node, "unresolved", "颜色变量在当前节点模式下解析失败");
     }
   }
   return candidates;
@@ -1133,8 +1188,10 @@ function buildTextMatches(nodes, context, settings, skipped) {
   const targetStyles = context.styles.filter((style) => style.fontFamily === settings.targetFamily);
   const matches = [];
   for (const node of nodes.filter((candidate) => candidate.type === "TEXT")) {
-    if (!shouldProcessNode(node, settings)) continue;
-    if (settings.onlyUnbound && (node.textStyleId === figma.mixed || node.textStyleId)) continue;
+    if (settings.onlyUnbound && (node.textStyleId === figma.mixed || node.textStyleId)) {
+      globalThis.ScanDiagnostics.record(skipped, "text", node, "bound", "已有文字样式绑定已保留");
+      continue;
+    }
     if (node.fontName === figma.mixed || node.fontSize === figma.mixed) {
       skipped.push({ kind: "text", id: node.id, reason: "混合字体或字号" });
       continue;
@@ -1157,7 +1214,6 @@ function buildColorMatches(nodes, variables, settings, skipped) {
   if (!settings.categories.color) return [];
   const matches = [];
   for (const node of nodes) {
-    if (!shouldProcessNode(node, settings)) continue;
     for (const property of ["fills", "strokes"]) {
       if (!(property in node)) continue;
       const styleField = property === "fills" ? "fillStyleId" : "strokeStyleId";
@@ -1166,14 +1222,22 @@ function buildColorMatches(nodes, variables, settings, skipped) {
         styleField in node &&
         node[styleField] !== figma.mixed &&
         node[styleField]
-      ) continue;
+      ) {
+        globalThis.ScanDiagnostics.record(skipped, "color", node, "bound", "已有颜色样式绑定已保留");
+        continue;
+      }
       const paints = node[property];
       if (!Array.isArray(paints)) continue;
-      const candidates = resolveColorCandidates(variables, node, property);
+      if (!paints.some((paint) => paint.type === "SOLID" && paint.visible !== false)) continue;
+      let candidates;
       for (let index = 0; index < paints.length; index += 1) {
         const paint = paints[index];
         if (paint.type !== "SOLID" || paint.visible === false) continue;
-        if (settings.onlyUnbound && hasBoundVariable(node, property, index)) continue;
+        if (settings.onlyUnbound && (hasBoundVariable(node, property, index) || paint.boundVariables?.color)) {
+          globalThis.ScanDiagnostics.record(skipped, "color", node, "bound", "已有颜色变量绑定已保留");
+          continue;
+        }
+        candidates ||= resolveColorCandidates(variables, node, property, skipped);
         const descriptor = {
           property,
           nodeType: node.type,
@@ -1210,7 +1274,7 @@ function scopeAllowsNumber(variable, kind) {
   return scopes.includes("GAP");
 }
 
-function resolveNumberCandidates(variables, node, kind) {
+function resolveNumberCandidates(variables, node, kind, skipped) {
   const candidates = [];
   for (const variable of variables) {
     if (variable.resolvedType !== "FLOAT" || !scopeAllowsNumber(variable, kind)) continue;
@@ -1226,22 +1290,22 @@ function resolveNumberCandidates(variables, node, kind) {
         source: variable.remote ? "library" : "local",
       });
     } catch {
-      // Explicit variable modes can make a token unavailable for a specific consumer.
+      globalThis.ScanDiagnostics.record(skipped, kind, node, "unresolved", "数值变量在当前节点模式下解析失败");
     }
   }
   return candidates;
 }
 
-function numericCatalog(context, variables, node, kind) {
+function numericCatalog(context, variables, node, kind, skipped) {
   if (context.profile.catalog === "vdesign") return globalThis.VDesignTokens[kind];
-  return resolveNumberCandidates(variables, node, kind);
+  return resolveNumberCandidates(variables, node, kind, skipped);
 }
 
 function buildRadiusMatches(nodes, variables, context, settings, skipped) {
   if (!settings.categories.radius) return [];
   const matches = [];
   for (const node of nodes) {
-    if (!shouldProcessNode(node, settings) || !("cornerRadius" in node)) continue;
+    if (!("cornerRadius" in node)) continue;
     const fields = node.cornerRadius === figma.mixed ? CORNER_FIELDS : ["cornerRadius"];
     for (const field of fields) {
       const value = node[field];
@@ -1249,10 +1313,13 @@ function buildRadiusMatches(nodes, variables, context, settings, skipped) {
       const alreadyBound = field === "cornerRadius"
         ? CORNER_FIELDS.some((corner) => hasBoundVariable(node, corner)) || hasBoundVariable(node, field)
         : hasBoundVariable(node, field);
-      if (settings.onlyUnbound && alreadyBound) continue;
+      if (settings.onlyUnbound && alreadyBound) {
+        globalThis.ScanDiagnostics.record(skipped, "radius", node, "bound", "已有圆角变量绑定已保留");
+        continue;
+      }
       const result = globalThis.VDesignTokenMatcher.matchNumberToken(
         value,
-        numericCatalog(context, variables, node, "radius"),
+        numericCatalog(context, variables, node, "radius", skipped),
       );
       if (!result.matched) {
         skipped.push({ kind: "radius", id: node.id, reason: result.reason });
@@ -1268,17 +1335,20 @@ function buildSpacingMatches(nodes, variables, context, settings, skipped) {
   if (!settings.categories.spacing) return [];
   const matches = [];
   for (const node of nodes) {
-    if (!shouldProcessNode(node, settings) || !("layoutMode" in node) || node.layoutMode === "NONE") {
+    if (!("layoutMode" in node) || node.layoutMode === "NONE") {
       continue;
     }
     for (const field of SPACING_FIELDS) {
       if (!(field in node)) continue;
       const value = node[field];
       if (!Number.isFinite(Number(value)) || Number(value) === 0) continue;
-      if (settings.onlyUnbound && hasBoundVariable(node, field)) continue;
+      if (settings.onlyUnbound && hasBoundVariable(node, field)) {
+        globalThis.ScanDiagnostics.record(skipped, "spacing", node, "bound", "已有间距变量绑定已保留");
+        continue;
+      }
       const result = globalThis.VDesignTokenMatcher.matchNumberToken(
         value,
-        numericCatalog(context, variables, node, "spacing"),
+        numericCatalog(context, variables, node, "spacing", skipped),
       );
       if (!result.matched) {
         skipped.push({ kind: "spacing", id: node.id, reason: result.reason });
@@ -1292,23 +1362,33 @@ function buildSpacingMatches(nodes, variables, context, settings, skipped) {
 
 async function buildPlan(settings) {
   if (!activeProfileId || settings.profileId !== activeProfileId) {
-    throw new Error("目标设计系统尚未确认，请先在顶部完成选择。");
+    throw new Error("请先选择目标设计系统，等待载入完成后再扫描。");
   }
   const context = await loadProfileContext(activeProfileId);
-  const nodes = collectSceneNodes(settings.scope);
+  const nodes = globalThis.ScanDiagnostics.collectSceneNodes(settings.scope, figma);
   const skipped = [];
+  const eligible = globalThis.ScanDiagnostics.filterNodes(nodes, settings, skipped);
   const needsVariables = settings.categories.color ||
     (context.profile.catalog !== "vdesign" && (settings.categories.radius || settings.categories.spacing));
   const variableContext = needsVariables
     ? await loadProfileVariables(context)
     : { variables: [], failures: [] };
   const matches = {
-    text: buildTextMatches(nodes, context, settings, skipped),
-    color: buildColorMatches(nodes, variableContext.variables, settings, skipped),
-    radius: buildRadiusMatches(nodes, variableContext.variables, context, settings, skipped),
-    spacing: buildSpacingMatches(nodes, variableContext.variables, context, settings, skipped),
+    text: buildTextMatches(eligible, context, settings, skipped),
+    color: buildColorMatches(eligible, variableContext.variables, settings, skipped),
+    radius: buildRadiusMatches(eligible, variableContext.variables, context, settings, skipped),
+    spacing: buildSpacingMatches(eligible, variableContext.variables, context, settings, skipped),
   };
-  return { context, nodes, matches, skipped, settings, variableFailures: variableContext.failures };
+  const variables = variableContext.variables;
+  const available = {
+    text: context.styles.filter((style) => style.fontFamily === settings.targetFamily).length,
+    color: variables.filter((variable) => variable.resolvedType === "COLOR").length,
+    radius: context.profile.catalog === "vdesign" ? globalThis.VDesignTokens.radius.length
+      : variables.filter((variable) => variable.resolvedType === "FLOAT" && scopeAllowsNumber(variable, "radius")).length,
+    spacing: context.profile.catalog === "vdesign" ? globalThis.VDesignTokens.spacing.length
+      : variables.filter((variable) => variable.resolvedType === "FLOAT" && scopeAllowsNumber(variable, "spacing")).length,
+  };
+  return { context, nodes, matches, skipped, settings, available, variableFailures: variableContext.failures };
 }
 
 function planForUi(plan) {
@@ -1332,6 +1412,9 @@ function planForUi(plan) {
     skipped: plan.skipped.length,
     previews: previews.slice(0, 120),
     warnings: plan.variableFailures.slice(0, 5),
+    diagnostics: globalThis.ScanDiagnostics.summarize(
+      plan.skipped, plan.matches, plan.available, plan.variableFailures, plan.settings.categories,
+    ),
     profileName: plan.context.profile.name,
     fontAvailable: plan.context.fonts.some(
       (font) => font.fontName.family === plan.settings.targetFamily,
@@ -1529,4 +1612,3 @@ initialize().catch((error) => {
     payload: { message: error instanceof Error ? error.message : String(error) },
   });
 });
-

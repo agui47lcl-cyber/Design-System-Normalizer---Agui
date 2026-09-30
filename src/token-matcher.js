@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖插件主线程提供的节点属性描述与已解析 VDesign 变量候选
- * [OUTPUT]: 对外提供 VDesignTokenMatcher，完成颜色语义消歧与数值 Token 的确定性匹配
+ * [OUTPUT]: 对外提供 VDesignTokenMatcher，先筛选颜色精度再做语义消歧，并精确匹配数值 Token
  * [POS]: src 的纯 Token 匹配核心，不依赖 Figma 全局对象，与 matcher.js 分别处理变量和文字样式
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -85,16 +85,17 @@
         };
       })
       .filter(({ distance }) => Number.isFinite(distance));
-    scored.sort((left, right) => {
+    const exact = scored.filter(({ distance }) => distance <= settings.exactTolerance);
+    const eligible = exact.length ? exact : settings.allowApproximate
+      ? scored.filter(({ distance }) => distance <= settings.approximateTolerance)
+      : [];
+    eligible.sort((left, right) => {
       if (left.score !== right.score) return left.score - right.score;
       return String(left.candidate.name).localeCompare(String(right.candidate.name), "zh-Hans-CN");
     });
-    const winner = scored[0];
-    const limit = settings.allowApproximate
-      ? settings.approximateTolerance
-      : settings.exactTolerance;
-    if (!winner || winner.distance > limit) {
-      return { matched: false, reason: "没有颜色值相符的 VDesign 变量" };
+    const winner = eligible[0];
+    if (!winner) {
+      return { matched: false, reason: "没有颜色值相符的目标变量" };
     }
     return {
       matched: true,
@@ -117,7 +118,7 @@
       .sort((left, right) => left.delta - right.delta);
     const winner = scored[0];
     if (!winner || winner.delta > settings.tolerance) {
-      return { matched: false, reason: `没有 ${source}px 的 VDesign Token` };
+      return { matched: false, reason: `没有 ${source}px 的目标变量` };
     }
     return { matched: true, token: winner.candidate, confidence: "high" };
   }

@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖系统明暗模式与 ui.html 的 data-slot 结构
- * [OUTPUT]: 对外提供零圆角、右上角工具栏、双列目标选择与明暗模式视觉层
+ * [OUTPUT]: 对外提供零圆角、无框左对齐类别、右侧工具栏和折叠扫描说明，支持明暗模式
  * [POS]: src 的 UI 样式层，以 Vanilla CSS 复刻控件结构并与 ui.js 的披露状态协作
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -8,6 +8,7 @@
   color-scheme: light dark;
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 12px;
+  --field-control-gap: 7px;
   --background: #fff;
   --foreground: #0a0a0a;
   --secondary: #f5f5f5;
@@ -134,10 +135,8 @@ textarea:focus-visible {
 }
 
 .header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 3px 10px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .header-actions {
@@ -145,23 +144,10 @@ textarea:focus-visible {
   gap: 6px;
 }
 
-.header .description {
-  grid-column: 1 / -1;
-  margin-top: 0;
-}
-
-h1,
 p {
   margin: 0;
 }
 
-h1 {
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 24px;
-}
-
-.description,
 .field-description,
 .footer p,
 #statusDescription,
@@ -169,19 +155,9 @@ h1 {
   color: var(--muted-foreground);
 }
 
-.description {
-  margin-top: 3px;
-  line-height: 18px;
-}
-
 .field-description {
   min-width: 0;
   line-height: 17px;
-}
-
-.target-settings {
-  display: grid;
-  gap: 8px;
 }
 
 .target-fields {
@@ -203,13 +179,21 @@ h1 {
   white-space: nowrap;
 }
 
-.profile-confirmation {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
+.scan-diagnostics > summary {
+  cursor: pointer;
+  font-weight: 500;
 }
 
+.scan-diagnostics p,
+.scan-diagnostics ul {
+  margin: 8px 0 0;
+  color: var(--muted-foreground);
+  line-height: 18px;
+}
+
+.scan-diagnostics ul {
+  padding-left: 18px;
+}
 .catalog-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -337,7 +321,7 @@ h1 {
 
 [data-slot="field"] {
   display: grid;
-  gap: 7px;
+  gap: var(--field-control-gap);
 }
 
 [data-slot="field-label"],
@@ -428,15 +412,18 @@ h1 {
   border-color: var(--foreground);
 }
 
+.category-set > [data-slot="field-legend"] {
+  margin-bottom: var(--field-control-gap);
+}
+
 .category-options {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .category-field {
-  min-height: 38px;
-  padding: 8px;
-  border: 1px solid var(--border);
+  min-height: 24px;
+  padding: 0;
 }
 
 .category-field [data-slot="field-label"] {

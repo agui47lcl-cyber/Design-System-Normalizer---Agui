@@ -1,6 +1,6 @@
 <!--
   [INPUT]: 依赖构建器注入 ui.css 与 ui.js，依赖插件主线程发送设计系统状态、扫描计划与应用结果
-  [OUTPUT]: 对外提供右上角规范包入口、双列目标选择、确认后收起的摘要区与应用预览骨架
+  [OUTPUT]: 对外提供单步目标选择、无框规范类别、顶部 JSON 入口与按需显示的状态和扫描说明
   [POS]: src 的 UI 结构层；工具入口与绑定主流程分离，样式与交互分别由 ui.css、ui.js 承担
   [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 -->
@@ -13,17 +13,15 @@
     <style>/*__INLINE_CSS__*/</style>
   </head>
   <body>
-    <main class="shell">
+    <main class="shell" aria-label="设计规范绑定器">
       <div class="scroll-area">
         <div class="stack">
           <header class="header">
-            <h1>设计规范绑定器</h1>
             <div class="header-actions" role="group" aria-label="JSON 规范包">
               <button data-slot="button" data-variant="outline" data-size="compact" id="chooseCatalog" type="button" title="导入 JSON 规范包">导入</button>
               <button data-slot="button" data-variant="outline" data-size="compact" id="exportCatalog" type="button" title="导出当前文件的 JSON 规范包">导出</button>
             </div>
             <input id="importCatalog" type="file" accept=".json,application/json" hidden />
-            <p class="description">把生成稿绑定到用户确认的文字样式与设计变量。</p>
           </header>
 
           <div data-slot="alert" id="status" role="status" aria-live="polite">
@@ -45,30 +43,24 @@
           </section>
 
           <div data-slot="field-group">
-            <div class="target-settings">
-              <div class="target-fields">
-                <div data-slot="field">
-                  <label data-slot="field-label" for="profile">目标设计系统</label>
-                  <div data-slot="native-select-wrapper">
-                    <select data-slot="native-select" id="profile" disabled></select>
-                    <svg data-slot="native-select-icon" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="m7 10 5 5 5-5" />
-                    </svg>
-                  </div>
-                </div>
-                <div data-slot="field">
-                  <label data-slot="field-label" for="family">目标字体</label>
-                  <div data-slot="native-select-wrapper">
-                    <select data-slot="native-select" id="family" disabled></select>
-                    <svg data-slot="native-select-icon" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="m7 10 5 5 5-5" />
-                    </svg>
-                  </div>
+            <div class="target-fields">
+              <div data-slot="field">
+                <label data-slot="field-label" for="profile">目标设计系统</label>
+                <div data-slot="native-select-wrapper">
+                  <select data-slot="native-select" id="profile" disabled></select>
+                  <svg data-slot="native-select-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m7 10 5 5 5-5" />
+                  </svg>
                 </div>
               </div>
-              <div class="profile-confirmation" id="profileConfirmation">
-                <p class="field-description" id="profileSummary">插件正在发现当前文件可用的设计系统…</p>
-                <button data-slot="button" data-variant="outline" data-size="compact" id="confirmProfile" type="button" disabled>设为目标规范</button>
+              <div data-slot="field">
+                <label data-slot="field-label" for="family">目标字体</label>
+                <div data-slot="native-select-wrapper">
+                  <select data-slot="native-select" id="family" disabled></select>
+                  <svg data-slot="native-select-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m7 10 5 5 5-5" />
+                  </svg>
+                </div>
               </div>
             </div>
 
@@ -80,7 +72,7 @@
               </div>
             </div>
 
-            <fieldset data-slot="field-set">
+            <fieldset data-slot="field-set" class="category-set">
               <legend data-slot="field-legend">规范类别</legend>
               <div data-slot="field-group" class="category-options">
                 <div data-slot="field" data-orientation="horizontal" class="category-field">
@@ -144,6 +136,11 @@
               <div><strong id="countRadius">0</strong><span>圆角</span></div>
               <div><strong id="countSpacing">0</strong><span>间距</span></div>
             </div>
+            <details class="scan-diagnostics" id="scanDiagnostics" hidden>
+              <summary>扫描说明</summary>
+              <p class="field-description" id="scanCandidates"></p>
+              <ul id="scanReasons"></ul>
+            </details>
             <div class="preview" id="preview"></div>
           </section>
         </div>

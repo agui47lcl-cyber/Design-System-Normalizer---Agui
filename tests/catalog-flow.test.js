@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 Node.js vm/test/assert 与 src 主线程模块、Figma API 的最小替身
- * [OUTPUT]: 对外验证损坏组件集隔离、变体采集、无文件 key 导出和目标切换
+ * [OUTPUT]: 对外验证规范包导入导出、单步目标切换及实例保护/已有绑定的扫描原因链路
  * [POS]: tests 的主线程契约测试，覆盖纯 JSON 契约之外的跨模块编排边界
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -12,7 +12,7 @@ const vm = require("node:vm");
 
 const sourceDir = path.resolve(__dirname, "../src");
 const modules = [
-  "library-catalog.js", "component-catalog.js", "design-system-profile.js", "matcher.js", "token-matcher.js",
+  "library-catalog.js", "component-catalog.js", "design-system-profile.js", "scan-diagnostics.js", "matcher.js", "token-matcher.js",
   "vdesign-styles.js", "vdesign-tokens.js", "code.js",
 ].map((name) => fs.readFileSync(path.join(sourceDir, name), "utf8")).join("\n");
 
@@ -34,6 +34,7 @@ test("Figma 未提供 fileKey 时仍可导出并导入已确认的目标规范",
     id: "variable-local", key: "variable-key", name: "Brand", remote: false,
     variableCollectionId: collection.id, resolvedType: "COLOR", scopes: ["ALL_FILLS"],
     valuesByMode: { "mode-light": { r: 1, g: 0, b: 0 } },
+    resolveForConsumer: () => ({ resolvedType: "COLOR", value: { r: 1, g: 0, b: 0, a: 1 } }),
   };
   const componentSet = {
     type: "COMPONENT_SET", key: "set-key", name: "Button", remote: false,
@@ -111,4 +112,26 @@ test("Figma 未提供 fileKey 时仍可导出并导入已确认的目标规范",
   assert.equal(storage.get("design-system-catalog-index")[0].name, "Acme Library");
   assert.equal(storage.get("design-system-catalog-index")[0].warningCount, 1);
   assert.equal(documentData.get("design-system-profile-id"), "catalog:asset%3Astyle-key");
+  const instance = { id: "instance", type: "INSTANCE", name: "Card", parent: null, children: [] };
+  const shape = { id: "shape", type: "RECTANGLE", name: "Background", parent: instance,
+    fillStyleId: "", fills: [{ type: "SOLID", color: { r: 1, g: 0, b: 0 } }] };
+  instance.children.push(shape);
+  figma.currentPage.selection = [instance];
+  const settings = { profileId: selected.payload.activeProfileId, targetFamily: "Inter", scope: "selection",
+    categories: { text: false, color: true, radius: false, spacing: false },
+    visibleOnly: true, onlyUnbound: true, includeInstances: false, includeLowConfidence: false };
+  await figma.ui.onmessage({ type: "scan", settings });
+  let result = messages.findLast((message) => message.type === "scan-result").payload;
+  assert.equal(result.matched, 0);
+  assert.equal(result.diagnostics.available.color, 1);
+  assert.equal(result.diagnostics.reasons.find((item) => item.code === "instance").count, 2);
+  await figma.ui.onmessage({ type: "scan", settings: { ...settings, includeInstances: true } });
+  result = messages.findLast((message) => message.type === "scan-result").payload;
+  assert.equal(result.counts.color, 1);
+  assert.equal(result.previews[0].confidence, "high");
+  shape.fills[0].boundVariables = { color: { type: "VARIABLE_ALIAS", id: variable.id } };
+  await figma.ui.onmessage({ type: "scan", settings: { ...settings, includeInstances: true } });
+  result = messages.findLast((message) => message.type === "scan-result").payload;
+  assert.equal(result.counts.color, 0);
+  assert.equal(result.diagnostics.reasons.find((item) => item.code === "bound").count, 1);
 });

@@ -2,9 +2,9 @@
 Vanilla JavaScript + Figma Plugin API + Node.js 内置测试
 
 <directory>
-src/ - 插件运行源码、组件容错采集、JSON 规范包契约、设计系统配置、匹配算法与拆分 UI（11 文件）
+src/ - 插件源码、JSON 规范包契约、单步目标选择、扫描诊断、匹配算法与拆分 UI（12 文件）
 scripts/ - 无依赖构建与素材渲染流程（2 文件：build.mjs、render-assets.mjs）
-tests/ - JSON 规范包与主线程消息链路、设计系统配置、匹配器、插件权限与主题回归测试（6 文件）
+tests/ - JSON 消息链路、扫描诊断、设计系统配置、匹配器、插件权限与 UI 状态回归（7 文件）
 assets/ - 发布素材的 HTML 源文件、渲染脚本产物 PNG、品牌矢量与 listing 文案（见 assets/CLAUDE.md）
 dist/ - 构建生成的 Figma 可运行产物，不手工修改
 </directory>
